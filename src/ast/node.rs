@@ -1,6 +1,9 @@
+
+//https://www.oschina.net/question/81620_239264
+
 /// 用于记录节点位于原代码中的位置，展开(lineNo, column)。
 #[derive(Debug)]
-pub struct Pos(i32, i32);
+pub struct Pos(pub i32, pub i32);
 
 /// 定义的一个语法树的节点集合。
 pub type NodeList<'a> = Vec<Node<'a>>;
@@ -27,6 +30,7 @@ pub enum Node<'a> {
 
 #[cfg(test)]
 mod node_tests {
+    use super::*;
     #[test]
     fn test() {
         let attr = Node::DomAttr {
