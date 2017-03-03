@@ -1,5 +1,5 @@
 [package]
-name = "otpl"
+name = "libotpl"
 version = "0.1.0"
 authors = ["jun"]
 

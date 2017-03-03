@@ -1,2 +1,2 @@
-# otpl-rust
-Otpl for rust
+# libotpl
+Otpl 的核心实现。
