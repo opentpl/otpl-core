@@ -53,12 +53,19 @@ impl<'a> Scanner<'a> {
         };
     }
 
-
+    /// 获取处于当前偏移位置的字符。
     fn current(&self) -> u8 {
         self.src[self.offset]
     }
-
-    fn forward(&mut self) {
+    /// 判断是否可向前。
+    fn can_forward(&self) -> bool {
+        self.offset + 1 < self.src.len()
+    }
+    /// 当前偏移位置+1，并处理行标和列标。
+    fn forward(&mut self) -> bool {
+        if !self.can_forward() {
+            return false;
+        }
         self.offset += 1;
         self.column += 1;
         if self.current() == ascii::LF {
@@ -71,22 +78,10 @@ impl<'a> Scanner<'a> {
             self.line += 1;
             self.column = 1;
         }
+        return true;
     }
 
-    fn assert_match(&self, offset: usize, b: u8) -> bool {
-        if offset < 0 || offset >= self.src.len() {
-            return false;
-        }
-        return self.src[offset] == b;
-    }
-
-    fn assert_next(&self, b: u8) -> bool {
-        if self.offset + 1 >= self.src.len() {
-            return false;
-        }
-        return self.src[self.offset] == b;
-    }
-
+    /// 当前偏移位置-1，并处理行标和列标。
     fn back(&mut self) {
         if self.offset - 1 < 0 {
             panic!("超出索引");
@@ -113,6 +108,20 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    fn assert_match(&self, offset: usize, b: u8) -> bool {
+        if offset < 0 || offset >= self.src.len() {
+            return false;
+        }
+        return self.src[offset] == b;
+    }
+    /// 与当前偏移的下一个字符作比较，如果可用的话。
+    fn assert_next(&self, b: u8) -> bool {
+        if self.offset + 1 >= self.src.len() {
+            return false;
+        }
+        return self.src[self.offset] == b;
+    }
+    /// 当前偏移位置+n, n为负数则调用 back() 否则 forward().
     fn seek(&mut self, n: isize) {
         if n < 0 {
             for i in 0..n.abs() {
@@ -120,21 +129,17 @@ impl<'a> Scanner<'a> {
             }
         } else if n > 0 {
             for i in 0..n {
-                self.forward()
+                self.forward();
             }
         }
     }
-
+    /// 根据当前位置与参数 pos 的差值调用 back() 。
     fn back_pos_diff(&mut self, pos: usize) {
         if pos >= self.offset {
             return;
         }
         let n = (self.offset - pos) as isize;
         self.seek(-n);
-    }
-
-    fn can_forward(&self) -> bool {
-        self.offset + 1 < self.src.len()
     }
 
     /// 消费掉连续的空白字符串
@@ -272,6 +277,7 @@ impl<'a> Scanner<'a> {
 
     /// 扫描 dom 节点，并暂存。注意：该方法不自动回退。
     fn scan_dom(&mut self) -> bool {
+        //匹配 <
         if self.current() != ascii::LSS {
             return false;
         }
