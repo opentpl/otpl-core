@@ -16,4 +16,3 @@ pub enum Node<'a> {
     /// 表是一个 DOM 节点，如：div。
     DomNode (DomNode<'a>),
 }
-

@@ -30,4 +30,12 @@ mod tests {
         let mut visitor = TestVisitor;
         visitor.visit(&node);
     }
+
+    trait Foo{
+        fn to(&self) ->i32;
+    }
+
+    fn test_fn(f: Box<Foo>){
+    }
+
 }
