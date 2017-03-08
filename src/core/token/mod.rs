@@ -1,7 +1,7 @@
 pub mod ascii;
 
 #[derive(Debug)]
-pub enum Token<'a> {
+pub enum Token {
     None,
     LSS(usize, usize),
     LEQ(usize, usize),
@@ -9,10 +9,13 @@ pub enum Token<'a> {
     GEQ(usize, usize),
     Symbol(usize, usize, u8),
     Data(usize, usize, Vec<u8>),
-    StmtStart(usize, usize, &'a [u8]),
-    StmtEnd(usize, usize, &'a [u8]),
+    StmtStart(usize, usize, Vec<u8>),
+    StmtEnd(usize, usize, Vec<u8>),
     LiteralBoundary(usize, usize, bool),
     Literal(usize, usize, Vec<u8>),
     Comments(usize, usize, Vec<u8>),
+    DomTagStart(usize, usize, Vec<u8>),
+    DomTagAttrName(usize, usize, Vec<u8>),
+    DomTagEnd(usize, usize, Vec<u8>),
 
 }

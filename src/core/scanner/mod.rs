@@ -2,8 +2,6 @@ use super::token::ascii;
 use super::token::Token;
 
 
-
-
 fn is_whitespace(c: u8) -> bool {
     return c == ascii::SP || c == ascii::TB || c == ascii::CR || c == ascii::LF;
 }
@@ -20,6 +18,23 @@ fn is_digit(c: u8) -> bool {
     return c >= 48u8 && c <= 57u8;
 }
 
+trait Queue<T> {
+    fn offer(&mut self, t: T);
+    fn take(&mut self) -> Option<T> ;
+}
+
+impl<T> Queue<T> for Vec<T> {
+    fn offer(&mut self, t: T) {
+        self.insert(0, t);
+    }
+
+    fn take(&mut self) -> Option<T> {
+        self.pop()
+    }
+}
+
+
+
 #[derive(Debug)]
 struct Scanner<'a> {
     line: usize,
@@ -28,12 +43,13 @@ struct Scanner<'a> {
     src: &'a [u8],
     stmt_start: &'a [u8],
     stmt_end: &'a [u8],
-    in_stmt: bool,
     // 是否处于OTPL段
-    in_literal: bool,
+    in_stmt: bool,
     // 是否处于原义输出段
-    in_comment: bool,
+    in_literal: bool,
     // 是否处于注释段
+    in_comment: bool,
+    tok_buf: Vec<Token>,
 }
 //inLiteral
 
@@ -50,6 +66,7 @@ impl<'a> Scanner<'a> {
             in_stmt: false,
             in_literal: false,
             in_comment: false,
+            tok_buf: vec![],
         };
     }
 
@@ -153,7 +170,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn match_stmt_start(&mut self) -> Option<Token<'a>> {
+    fn match_stmt_start(&mut self) -> Option<Token> {
         let none = Option::None;
         if self.current() != self.stmt_start[0] {
             return none;
@@ -167,7 +184,9 @@ impl<'a> Scanner<'a> {
             }
             self.forward();
         }
-        return Some(Token::StmtStart(line, col, self.stmt_start));
+        let mut tmp:Vec<u8> = vec![];
+        tmp.extend_from_slice(self.stmt_start);
+        return Some(Token::StmtStart(line, col, tmp));
     }
 
     fn match_stmt_end(&mut self) -> bool {
@@ -186,7 +205,7 @@ impl<'a> Scanner<'a> {
         return true;
     }
 
-    fn scan_stmt(&mut self) -> Token<'a> {
+    fn scan_stmt(&mut self) -> Token {
         let (line, column) = (self.line, self.column);
         let c = self.current();
         if c == ascii::LSS {
@@ -207,6 +226,7 @@ impl<'a> Scanner<'a> {
         return Token::None;
     }
 
+    /// 提取dom标签或属性名称
     fn match_dom_name(&mut self, allowDollarPrefix: bool, allowAtPrefix: bool, allowUnderline: bool) -> Option<Vec<u8>> {
         let c = self.current();
         if !allowDollarPrefix && c == ascii::DLS {
@@ -285,68 +305,76 @@ impl<'a> Scanner<'a> {
         if !self.can_forward() {
             return false;
         }
-
-        let name = self.match_dom_name(false, false, false);
-        if let Option::Some(val) = name {
-            //push
-            println!("\ntodo: push {:?}", val);
+        let (line, column) = (self.line, self.column);
+        let tmp = self.match_dom_name(false, false, false);
+        if let Option::Some(name) = tmp {
+            debug!("dom tag: {:?}", name);
+            self.tok_buf.offer(Token::DomTagStart(line, column, name));
         } else {
             return false;
         }
 
         while self.can_forward() {
             self.consume_whitespace();
-            let x = self.current();
-            let tag = self.match_dom_name(true, true, true);
-            println!("xxxxxxxxxxxxxyyxxx {:?} {} = {}", &tag, self.current(), x);
-            if let Option::Some(name) = tag {
-                println!("\ntodo: push attr {:?}", name);
+            debug!("expected dom attr name first char: {:?}", self.current());
+            let (line, column) = (self.line, self.column);
+            let tmp = self.match_dom_name(true, true, true);
+            if let Option::Some(name) = tmp {
+                self.tok_buf.offer(Token::DomTagAttrName(line, column, name));
                 // 扫描属性表达式 name="value"
                 self.consume_whitespace();
+                // 匹配 =
                 if self.current() != ascii::EQS {
-                    // 匹配 =
+                    //如果不匹配则视为独立属性
                     continue;
                 }
+                let (line, column) = (self.line, self.column);
+                //吃掉=和空白
                 self.forward();
+                self.tok_buf.offer(Token::Symbol(line, column, ascii::EQS));
                 self.consume_whitespace();
-                //字符串
+                //匹配字符串
                 if self.current() != ascii::QUO {
                     panic!("期望引号 ，找到 {}", self.current());
                 }
-                let pos = self.offset;
-                let rst = self.extract_str(ascii::QUO);
-                if let Option::Some(s) = rst {
-                    //let s = unsafe { String::from_utf8_unchecked(s) };
-                    //println!("\ntodo: str  {:?}", s);
-                    let mut temp = Scanner::new(&s[..], self.stmt_start, self.stmt_end);
-                    temp.line = self.line;
+                let tmp = self.extract_str(ascii::QUO);
+                if let Option::Some(s) = tmp {
+                    //解析属性值
+                    //TODO: 处理扩展语法
+                    let mut ts = Scanner::new(&s[..], self.stmt_start, self.stmt_end);
+                    ts.line = self.line;
                     loop {
-                        let tok = temp.scan();
+                        let tok = ts.scan();
                         if let Token::None = tok {
                             break;
                         } else {
-                            println!("\ntodo: sub tok  {:?}", tok);
+                            self.tok_buf.offer(tok);
                         }
                     }
                 } else {
                     panic!("字符串未结束");
                 }
             }
+            let (line, column) = (self.line, self.column);
             if self.current() == ascii::SLA && self.assert_next(ascii::GTR) {
-                self.forward();
-                break;
+                self.seek(2);
+                self.tok_buf.offer(Token::DomTagEnd(line, column, vec![ascii::SLA, ascii::GTR]));
+                return true;
             } else if self.current() == ascii::GTR {
-                break;
+                self.forward();
+                self.tok_buf.offer(Token::DomTagEnd(line, column, vec![ascii::GTR]));
+                return true;
             }
+            //结束
             self.forward();
-            println!("ddddd {:?}", 1);
         }
-
-
         return false;
     }
 
     pub fn scan(&mut self) -> Token {
+        if !self.tok_buf.is_empty() {
+            return self.tok_buf.take().unwrap();
+        }
         if self.src.len() == 0 || self.offset >= self.src.len() - 1 {
             return Token::None;
         }
@@ -386,8 +414,11 @@ impl<'a> Scanner<'a> {
         }
 
         if !self.in_comment && !self.in_literal && self.current() == ascii::LSS {
-            // todo: dom begin
-            self.scan_dom();
+            let pos = self.offset;
+            if self.scan_dom() {
+                return self.scan();
+            }
+            self.back_pos_diff(pos);
         }
 
         let begin_char = self.stmt_start[0];
@@ -419,11 +450,8 @@ impl<'a> Scanner<'a> {
 }
 
 
-
 #[test]
 fn test_scan() {
-    let id= 1;
-    bar!(id);
     let mut eof = false;
     let mut scanner = Scanner::new("<div id=\"te\\\"st\">".as_bytes(), "{{".as_bytes(), "}}".as_bytes());
     'outer: loop {
@@ -431,11 +459,10 @@ fn test_scan() {
         match token {
             Token::None => { break 'outer; },
             _ => {
-                println!("scanned token: {:?}", token);
+                debug!("scanned token: {:?}", token);
             }
         }
     }
-    //println!("{}", scanner.src)
 }
 
 
