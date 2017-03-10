@@ -45,7 +45,7 @@ pub struct Parser<'a> {
     scanner: Scanner<'a>,
     token_buf: Vec<Token<'a>>,
     breaks: Vec<BreakPoint>,
-    break_checkers: Vec<Box<(Fn(&mut Parser) -> bool)>>,
+    break_checkers: Vec<Box<(FnMut(&mut Parser) -> bool)>>,
 }
 
 
@@ -97,11 +97,11 @@ impl<'a> Parser<'a> {
         return false;
     }
 
-    fn set_breakpoint(&mut self, checker: Box<(Fn(&mut Parser) -> bool)>) {
+    fn set_breakpoint(&mut self, checker: Box<(FnMut(&mut Parser) -> bool)>) {
         self.break_checkers.push(checker);
     }
 
-    fn pop_breakpoint(&mut self) -> Option<Box<(Fn(&mut Parser) -> bool)>> {
+    fn pop_breakpoint(&mut self) -> Option<Box<(FnMut(&mut Parser) -> bool)>> {
         self.break_checkers.pop()
     }
 
@@ -109,8 +109,8 @@ impl<'a> Parser<'a> {
         if self.break_checkers.is_empty() {
             return false;
         }
-        let checker = self.break_checkers.pop().unwrap();
-        let result = checker(self);
+        let mut checker = self.break_checkers.pop().unwrap();
+        let result = checker.as_mut()(self);
         self.break_checkers.push(checker);
         return result;
     }
@@ -173,13 +173,12 @@ impl<'a> Parser<'a> {
         if !parse_children {
             return tag;
         }
-        self.set_breakpoint(Box::new(|owner: &mut Parser| -> bool {
-            let mut tag_name: Vec<u8> = Vec::new();
-            for c in tag.pos.str {
-                tag_name.push(c.clone());
-            }
+        let mut tag_name: Vec<u8> = Vec::new();
+        tag_name.extend_from_slice(tag.pos.str);
+        self.set_breakpoint(Box::new(move |owner: &mut Parser| -> bool {
+            let mut name: Vec<u8> = tag_name.clone();
             let mut breaks: Vec<BreakPoint> = vec![
-                BreakPoint::new(false, vec![vec![ascii::SLA], tag_name]),
+                BreakPoint::new(false, vec![vec![ascii::SLA], name]),
             ];
 
             let mut found = true;
@@ -188,7 +187,7 @@ impl<'a> Parser<'a> {
                     continue;
                 }
                 found = true;
-                let buf: Vec<Token> = vec![];
+                let mut buf: Vec<Token> = vec![];
                 for value in &point.values {
                     if let Option::Some(tok) = owner.take() {
                         if !value.compare(tok.str) {
