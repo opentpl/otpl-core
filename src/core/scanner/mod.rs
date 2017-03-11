@@ -1,7 +1,8 @@
 use super::token::ascii;
 use super::token::Token;
 use super::token::TokenKind;
-use super::token::Pos;
+use std::path::Path;
+use util::Queue;
 
 fn is_whitespace(c: u8) -> bool {
     return c == ascii::SP || c == ascii::TB || c == ascii::CR || c == ascii::LF;
@@ -19,30 +20,26 @@ fn is_digit(c: u8) -> bool {
     return c >= 48u8 && c <= 57u8;
 }
 
-trait Queue<T> {
-    fn offer(&mut self, t: T);
-    fn take(&mut self) -> Option<T>;
-}
-
-impl<T> Queue<T> for Vec<T> {
-    fn offer(&mut self, t: T) {
-        self.insert(0, t);
-    }
-
-    fn take(&mut self) -> Option<T> {
-        self.pop()
-    }
-}
-
 
 #[derive(Debug)]
 pub struct Scanner<'a> {
-    line: usize,
-    column: usize,
-    offset: usize,
+    // immutable state ->
+    // source filename
+    filename: &'a Path,
+    // source
     src: &'a [u8],
     stmt_start: &'a [u8],
     stmt_end: &'a [u8],
+
+    // scanning state ->
+    // current line
+    line: usize,
+    // current column offset of line.
+    column: usize,
+    // character offset
+    offset: usize,
+    // current character. NOTE: only check ASCII characters.
+    ch: u8,
     // 是否处于OTPL段
     in_stmt: bool,
     // 是否处于原义输出段
@@ -55,12 +52,16 @@ pub struct Scanner<'a> {
 
 #[allow(dead_code)]
 impl<'a> Scanner<'a> {
-    pub fn new(src: &'a [u8], stmt_start: &'a [u8], stmt_end: &'a [u8]) -> Scanner<'a> {
-        return Scanner {
-            line: 0,
-            column: 0,
+    pub fn new(src: &'a [u8], filename: &'a Path, stmt_start: &'a [u8], stmt_end: &'a [u8]) -> Scanner<'a> {
+        //
+
+        let mut ist = Scanner {
+            line: 1,
+            column: 1,
             offset: 0,
+            filename: filename,
             src: src,
+            ch: '\0' as u8,
             stmt_start: stmt_start,
             stmt_end: stmt_end,
             in_stmt: false,
@@ -68,11 +69,24 @@ impl<'a> Scanner<'a> {
             in_comment: false,
             tok_buf: vec![],
         };
+
+        // check and skip BOM. see https://en.wikipedia.org/wiki/Byte_order_mark
+        if ist.src.len() >= 3
+            && ist.src[0] == 239u8
+            && ist.src[1] == 187u8
+            && ist.src[2] == 191u8 {
+            ist.offset = 3;
+        }
+
+        return ist;
     }
 
     /// 获取处于当前偏移位置的字符。
     fn current(&self) -> u8 {
-        self.src[self.offset]
+        if self.offset >= self.src.len() - 1 {
+            return 0u8;
+        }
+        return self.src[self.offset];
     }
     /// 判断是否可向前。
     fn can_forward(&self) -> bool {
@@ -90,11 +104,14 @@ impl<'a> Scanner<'a> {
                 self.offset += 1;
             }
             self.line += 1;
+            debug!("{}++++++++++++++++++++++++++++++++", self.line);
             self.column = 1;
         } else if self.current() == ascii::CR {
             self.line += 1;
+            debug!("{}++++++++++++++++++++++++++++++++", self.line);
             self.column = 1;
         }
+
         return true;
     }
 
@@ -104,17 +121,19 @@ impl<'a> Scanner<'a> {
             panic!("超出索引");
         }
         self.offset -= 1;
-        self.column -= 1;
+        if self.column > 0 {
+            self.column -= 1;
+        }
         if self.current() == ascii::CR || self.current() == ascii::LF {
             self.line -= 1;
-
+            debug!("{}-----------------------------", self.line);
             self.column = 1;
             let mut pos = self.offset;
             while pos >= 0 {
                 if self.src[pos] == ascii::CR {
-                    // if pos - 1 >= 0 && self.src[pos - 1] == ascii::LF {
-                    //
-                    // }
+                    if pos - 1 >= 0 && self.src[pos - 1] == ascii::LF {
+                        self.offset -= 1;
+                    }
                     break;
                 } else if self.src[pos] == ascii::LF {
                     break;
@@ -184,7 +203,7 @@ impl<'a> Scanner<'a> {
             }
             self.forward();
         }
-        return Some(Token::new(line, col, &self.stmt_start, TokenKind::DomTagStart));
+        return Some(Token::new(line, col, &self.filename, &self.stmt_start, TokenKind::DomTagStart));
         //        let mut tmp: Vec<u8> = vec![];
         //        tmp.extend_from_slice(self.stmt_start);
         //        return Some(Token::StmtStart(line, col, tmp));
@@ -239,34 +258,32 @@ impl<'a> Scanner<'a> {
             return Option::None;
         }
 
-        if is_lower_letter(c)
+        if !(is_lower_letter(c)
             || is_upper_letter(c)
-            || c == ascii::DLS
-            || c == ascii::ATS
-            || c == ascii::UND {
-            //            buf.push(c);
-        } else {
+            || (allowDollarPrefix && c == ascii::DLS)
+            || (allowAtPrefix && c == ascii::ATS)
+            || (allowUnderline && c == ascii::UND)) {
             return Option::None;
         }
+
         let pos = self.offset;
-        while self.can_forward() {
-            self.forward();
+        while self.forward() {
             let c = self.current();
             if is_whitespace(c)
                 || c == ascii::SLA
                 || c == ascii::GTR
                 || c == ascii::EQS {
-                // 匹配 / > =
+                // 匹配 / > = 和空白
                 break;
-            } else if is_lower_letter(c)
+            } else if !(is_lower_letter(c)
                 || is_upper_letter(c)
                 || is_digit(c)
-                || c == ascii::UND {
-                // buf.push(c);
-                continue;
+                || c == ascii::SUB
+                || (allowUnderline && c == ascii::UND)) {
+                //允许字母数字+下划线
+                self.back_pos_diff(pos);
+                return Option::None;
             }
-            self.back_pos_diff(pos);
-            return Option::None;
         }
         return Option::Some(&self.src[pos..self.offset]); //TODO: 后一个字符
     }
@@ -286,7 +303,7 @@ impl<'a> Scanner<'a> {
                 continue;
             } else if c == end {
                 self.forward();// 吃掉结束符
-                return Option::Some(&self.src[pos..self.offset]);
+                return Option::Some(&self.src[pos + 1..self.offset]);
             }
             //s.push(c);
         }
@@ -298,19 +315,35 @@ impl<'a> Scanner<'a> {
     /// 扫描 dom 节点，并暂存。注意：该方法不自动回退。
     fn scan_dom(&mut self) -> bool {
         //匹配 <
-        if self.current() != ascii::LSS {
+        if self.current() != ascii::LSS || !self.forward() {
             return false;
         }
-        self.forward();
-        if !self.can_forward() {
-            return false;
+        //匹配 /
+        if self.current() == ascii::SLA {
+            self.forward();
+            let pos = self.offset;
+            let (line, column) = (self.line, self.column);
+            if let Option::None = self.extract_dom_name(false, false, false) {
+                panic!("illegal dom-tag-identifier, near character {}. at {:?}({}:{})", self.current() as char, self.filename, line, column);
+            }
+            self.consume_whitespace();
+            {
+                let (line, column) = (self.line, self.column);
+                if self.current() != ascii::GTR {
+                    panic!("expected character {}, found {}. at {:?}({}:{})", ascii::GTR as char, self.current() as char, self.filename, line, column);
+                }
+                self.forward();
+            }
+            self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[pos..self.offset - 1], TokenKind::DomCTag));
+            return true;
         }
+
         let (line, column) = (self.line, self.column);
         let tmp = self.extract_dom_name(false, false, false);
         if let Option::Some(name) = tmp {
             //let name = (unsafe{String::from_utf8_unchecked(name)}).as_bytes();
             debug!("dom tag: {:?}", name);
-            self.tok_buf.offer(Token::new(line, column, name, TokenKind::DomTagStart));
+            self.tok_buf.offer(Token::new(line, column, &self.filename, name, TokenKind::DomTagStart));
         } else {
             return false;
         }
@@ -321,20 +354,20 @@ impl<'a> Scanner<'a> {
             let (line, column) = (self.line, self.column);
             let tmp = self.extract_dom_name(true, true, true);
             if let Option::Some(name) = tmp {
-                self.tok_buf.offer(Token::new(line, column, name, TokenKind::DomTagAttrStart));
+                self.tok_buf.offer(Token::new(line, column, &self.filename, name, TokenKind::DomAttrStart));
                 // 扫描属性表达式 name="value"
                 self.consume_whitespace();
                 // 匹配 =
                 if self.current() != ascii::EQS {
                     //如果不匹配则视为独立属性
                     let (line, column) = (self.line, self.column);
-                    self.tok_buf.offer(Token::new(line, column, &self.src[self.offset - 1..self.offset], TokenKind::DomTagAttrEnd));
+                    self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset - 1..self.offset], TokenKind::DomAttrEnd));
                     continue;
                 }
                 let (line, column) = (self.line, self.column);
                 //吃掉=和空白
                 self.forward();
-                self.tok_buf.offer(Token::new(line, column, &self.src[self.offset - 1..self.offset], TokenKind::Symbol));
+                self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset - 1..self.offset], TokenKind::Symbol));
                 self.consume_whitespace();
                 //匹配字符串
                 if self.current() != ascii::QUO {
@@ -344,25 +377,25 @@ impl<'a> Scanner<'a> {
                 if let Option::Some(s) = tmp {
                     //解析属性值
                     //TODO: 处理扩展语法 &s[..]
-                    let mut ts = Scanner::new("".as_bytes(), self.stmt_start, self.stmt_end);
+                    let mut ts = Scanner::new(&s[..], "subfile".as_ref(), self.stmt_start, self.stmt_end);
                     ts.line = self.line;
                     while let Some(tok) = ts.scan() {
                         self.tok_buf.offer(tok);
                     }
                     let (line, column) = (self.line, self.column);
-                    self.tok_buf.offer(Token::new(line, column, &self.src[self.offset..self.offset + 1], TokenKind::DomTagAttrEnd));
+                    self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset..self.offset + 1], TokenKind::DomAttrEnd));
                 } else {
                     panic!("字符串未结束");
                 }
             }
             let (line, column) = (self.line, self.column);
             if self.current() == ascii::SLA && self.assert_next(ascii::GTR) {
-                self.tok_buf.offer(Token::new(line, column, &self.src[self.offset..self.offset + 2], TokenKind::DomTagEnd));
+                self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset..self.offset + 2], TokenKind::DomTagEnd));
                 self.seek(2);
 
                 return true;
             } else if self.current() == ascii::GTR {
-                self.tok_buf.offer(Token::new(line, column, &self.src[self.offset..self.offset + 1], TokenKind::DomTagEnd));
+                self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset..self.offset + 1], TokenKind::DomTagEnd));
                 self.forward();
                 return true;
             }
@@ -382,18 +415,24 @@ impl<'a> Scanner<'a> {
             return Option::None;
         }
 
+        let (line, column) = (self.line, self.column);
+        let origin = self.offset;
+
         if !self.in_comment && !self.in_literal && self.current() == ascii::LSS {
             let pos = self.offset;
             if self.scan_dom() {
                 return self.scan();
             }
             self.back_pos_diff(pos);
+            self.forward();// skip current char <
         }
 
-        let (line, column) = (self.line, self.column);
-        let origin = self.offset;
-        let mut pos = self.offset;
+
+        let mut pos: usize;
         while self.can_forward() {
+            if ascii::LSS == self.current() {
+                break;
+            }
             pos = self.offset;
             if let Some(tok) = self.match_stmt_start() {
                 self.back_pos_diff(pos);
@@ -408,7 +447,7 @@ impl<'a> Scanner<'a> {
         //        if self.in_literal {
         //            return Token::Literal(line, column, buf);
         //        }
-        return Some(Token::new(line, column, &self.src[origin..self.offset], TokenKind::DomTagStart));
+        return Some(Token::new(line, column, &self.filename, &self.src[origin..self.offset], TokenKind::Data));
     }
 }
 

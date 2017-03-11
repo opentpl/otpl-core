@@ -1,23 +1,37 @@
 use super::*;
+use core::token::Token;
 
 /// 定义一个用于访问AST节点的一组方法。
-pub trait Visitor {
+pub trait Visitor<'a> {
 
     /// 访问分类抽象节点。
-    fn visit(&mut self, node: &Node) {
+    fn visit(&mut self, node: &'a Node) {
         match node {
-            &Node::DomNode(ref inner) => self.visit_dom_node(inner),
+            &Node::Root(ref inner) => self.visit_root(inner),
+            &Node::Literal(ref inner) => self.visit_literal(inner),
+            &Node::DomTag(ref inner) => self.visit_dom_tag(inner),
             _ => self.visit_undefined(node)
         }
     }
     /// 访问未在本访问器定义的 Node。
     #[allow(unused_variables)]
-    fn visit_undefined(&mut self, node: &Node){
+    fn visit_undefined(&mut self, node: &'a Node){
         match node {
             &Node::None  => {},
             _ => println!("warning: undefined visit node {:?}", node)
         }
     }
-    /// 访问 DomNode
-    fn visit_dom_node(&mut self, node: &DomNode);
+    fn visit_root(&mut self, root:&'a Root) {
+        for n in &root.body {
+            self.visit(&n);
+        }
+    }
+    fn visit_list(&mut self, list:&'a NodeList) {
+        for n in list {
+            self.visit(&n);
+        }
+    }
+    fn visit_literal(&mut self, tok: &'a Token);
+    /// 访问 DomTag
+    fn visit_dom_tag(&mut self, tag: &'a DomTag);
 }

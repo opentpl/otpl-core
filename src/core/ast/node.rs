@@ -1,6 +1,6 @@
-use super::DomNode;
+use super::DomTag;
+use super::token::Token;
 //https://www.oschina.net/question/81620_239264
-
 
 
 /// 定义的一个语法树的节点集合。
@@ -11,6 +11,21 @@ pub type NodeList<'a> = Vec<Node<'a>>;
 pub enum Node<'a> {
     /// 表是一个用于占位的空节点。
     None,
+    Literal(Token<'a>),
+    Root(Root<'a>),
     /// 表是一个 DOM 节点，如：div。
-    DomNode (DomNode<'a>),
+    DomTag(DomTag<'a>),
+}
+
+#[derive(Debug)]
+pub struct Root<'a> {
+    pub body: NodeList<'a>,
+}
+
+impl<'a> Root<'a> {
+    pub fn new() -> Root<'a> {
+        return Root {
+            body: vec![],
+        };
+    }
 }

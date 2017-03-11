@@ -21,12 +21,18 @@ pub static REM      : u8 = 37; // %
 pub static APO      : u8 = 39; // '
 /// 乘号 *
 pub static MUL      : u8 = 42; // *
+/// 减号 -
 pub static SUB      : u8 = 45; // -
+/// 斜杠 /
 pub static SLA      : u8 = 47; // /
 pub static LSS      : u8 = 60; // <
+/// 等于符号 =
 pub static EQS      : u8 = 61; // =
-pub static ATS      : u8 = 64; // @
+/// 大于符号 >
 pub static GTR      : u8 = 62; // >
+/// @ 符号
+pub static ATS      : u8 = 64; // @
+
 /// 反斜杠 \
 pub static BKS      : u8 = 92; // \ 反斜杠 Backslash
 /// 下划线 _
