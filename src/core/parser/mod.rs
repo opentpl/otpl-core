@@ -27,7 +27,7 @@ pub struct Parser<'a> {
 
 
 impl<'a> Parser<'a> {
-    pub fn new(scanner: Scanner<'a>) -> Parser<'a> {
+    pub fn new(scanner: Scanner<'a>) -> Parser {
         //        let mut scanner = Scanner::new("<div id=\"te\\\"st\">".as_bytes(), "{{".as_bytes(), "}}".as_bytes());
         return Parser {
             scanner: scanner,
@@ -144,7 +144,7 @@ impl<'a> Parser<'a> {
         //todo: 检查错误
         let mut parse_children = false;
         if let Some(tok) = self.expect_type(TokenKind::DomTagEnd) {
-            parse_children = tok.str[0] != ascii::SLA; // 如果不是独立标签 /
+            //parse_children = tok.str[0] != ascii::SLA; // 如果不是独立标签 /
         } else {
             return Option::None;
         }

@@ -1,6 +1,8 @@
 use super::token::ascii;
 use super::token::Token;
 use super::token::TokenKind;
+use super::token::Source;
+use std::rc::Rc;
 use std::path::Path;
 use util::Queue;
 
@@ -20,6 +22,7 @@ fn is_digit(c: u8) -> bool {
     return c >= 48u8 && c <= 57u8;
 }
 
+struct Range(usize, usize);
 
 #[derive(Debug)]
 pub struct Scanner<'a> {
@@ -47,8 +50,37 @@ pub struct Scanner<'a> {
     // 是否处于注释段
     in_comment: bool,
     tok_buf: Vec<Token<'a>>,
+    //srcd: Source<'a>,
 }
-//inLiteral
+
+impl<'a>  Source for Scanner<'a> {
+    fn line(&self, tok: &Token) -> usize {
+        unimplemented!()
+    }
+
+    fn column(&self, tok: &Token) -> usize {
+        unimplemented!()
+    }
+
+    fn filename(&self) -> &Path {
+        unimplemented!()
+    }
+
+    fn content(&self, tok: &Token) -> &[u8] {
+        unimplemented!()
+    }
+}
+
+macro_rules! error {
+    ()=>();
+//    ($fmt:expr) => (
+//        panic!(concat!($fmt, format!(" at {:?}({}:{})", self.filename, line, column)));
+//    );
+    ($fmt:expr, $($arg:tt)*) => (
+        //panic!(concat!($fmt, " at {:?}({}:{})"), $($arg)*, self.filename, self.line, self.column);
+    );
+}
+
 
 #[allow(dead_code)]
 impl<'a> Scanner<'a> {
@@ -56,6 +88,7 @@ impl<'a> Scanner<'a> {
         //
 
         let mut ist = Scanner {
+            //srcd:Source{content:src},
             line: 1,
             column: 1,
             offset: 0,
@@ -188,25 +221,20 @@ impl<'a> Scanner<'a> {
             }
         }
     }
-
+    /*
     fn match_stmt_start(&mut self) -> Option<Token<'a>> {
-        let none = Option::None;
-        if self.current() != self.stmt_start[0] {
-            return none;
+        if self.ch != self.stmt_start[0] {
+            return Option::None;
         }
-        let (line, col) = (self.line, self.column);
         let pos = self.offset;
         for i in 0..self.stmt_start.len() {
             if self.current() != self.stmt_start[i] {
                 self.back_pos_diff(pos);
-                return none;
+                return Option::None;
             }
             self.forward();
         }
-        return Some(Token::new(line, col, &self.filename, &self.stmt_start, TokenKind::DomTagStart));
-        //        let mut tmp: Vec<u8> = vec![];
-        //        tmp.extend_from_slice(self.stmt_start);
-        //        return Some(Token::StmtStart(line, col, tmp));
+        return Some(Token::new(self, TokenKind::DomTagStart, pos, self.stmt_start.len()));
     }
 
     fn match_stmt_end(&mut self) -> bool {
@@ -223,7 +251,7 @@ impl<'a> Scanner<'a> {
         }
         return true;
     }
-    /*
+
     fn scan_stmt(&mut self) -> Token<'a> {
         let (line, column) = (self.line, self.column);
         let c = self.current();
@@ -245,17 +273,19 @@ impl<'a> Scanner<'a> {
         return Token::None;
     }
     */
+
     /// 提取dom标签或属性名称
-    fn extract_dom_name(&mut self, allowDollarPrefix: bool, allowAtPrefix: bool, allowUnderline: bool) -> Option<&'a [u8]> {
-        let c = self.current();
+    fn find_dom_name(&mut self, allowDollarPrefix: bool, allowAtPrefix: bool, allowUnderline: bool) -> Range {
+        let none = Range(0, 0);
+        let c = self.ch;
         if !allowDollarPrefix && c == ascii::DLS {
-            return Option::None;
+            return none;
         }
         if !allowAtPrefix && c == ascii::ATS {
-            return Option::None;
+            return none;
         }
         if !allowUnderline && c == ascii::UND {
-            return Option::None;
+            return none;
         }
 
         if !(is_lower_letter(c)
@@ -263,12 +293,12 @@ impl<'a> Scanner<'a> {
             || (allowDollarPrefix && c == ascii::DLS)
             || (allowAtPrefix && c == ascii::ATS)
             || (allowUnderline && c == ascii::UND)) {
-            return Option::None;
+            return none;
         }
 
         let pos = self.offset;
         while self.forward() {
-            let c = self.current();
+            let c = self.ch;
             if is_whitespace(c)
                 || c == ascii::SLA
                 || c == ascii::GTR
@@ -282,14 +312,14 @@ impl<'a> Scanner<'a> {
                 || (allowUnderline && c == ascii::UND)) {
                 //允许字母数字+下划线
                 self.back_pos_diff(pos);
-                return Option::None;
+                return none;
             }
         }
-        return Option::Some(&self.src[pos..self.offset]); //TODO: 后一个字符
+        return Range(pos, self.offset - pos); //TODO: 后一个字符
     }
 
     /// 提取字符串，未找到返回 None
-    fn extract_str(&mut self, end: u8) -> Option<&'a [u8]> {
+    fn find_str(&mut self, end: u8) -> Range {
         let pos = self.offset;
         while self.can_forward() {
             self.forward();
@@ -303,99 +333,95 @@ impl<'a> Scanner<'a> {
                 continue;
             } else if c == end {
                 self.forward();// 吃掉结束符
-                return Option::Some(&self.src[pos + 1..self.offset]);
+                return Range(pos + 1, self.offset - pos - 1);
             }
             //s.push(c);
         }
         self.back_pos_diff(pos);
-        return Option::None;
+        return Range(0, 0);
     }
 
+    fn error(&mut self) {}
 
     /// 扫描 dom 节点，并暂存。注意：该方法不自动回退。
     fn scan_dom(&mut self) -> bool {
         //匹配 <
-        if self.current() != ascii::LSS || !self.forward() {
+        if self.ch != ascii::LSS || !self.forward() {
             return false;
         }
         //匹配 /
-        if self.current() == ascii::SLA {
+        if self.ch == ascii::SLA {
             self.forward();
             let pos = self.offset;
-            let (line, column) = (self.line, self.column);
-            if let Option::None = self.extract_dom_name(false, false, false) {
-                panic!("illegal dom-tag-identifier, near character {}. at {:?}({}:{})", self.current() as char, self.filename, line, column);
+            let Range(offs, len) = self.find_dom_name(false, false, false);
+            if offs == 0 {
+                error!("illegal dom-tag-identifier, near character {}.", self.current() as char);
             }
             self.consume_whitespace();
             {
-                let (line, column) = (self.line, self.column);
-                if self.current() != ascii::GTR {
-                    panic!("expected character {}, found {}. at {:?}({}:{})", ascii::GTR as char, self.current() as char, self.filename, line, column);
+                if self.ch != ascii::GTR {
+                    error!("expected character {}, found {}.", ascii::GTR as char, self.current() as char);
                 }
                 self.forward();
             }
-            self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[pos..self.offset - 1], TokenKind::DomCTag));
+            //self.tok_buf.offer(Token::new(self, TokenKind::DomCTag, pos, self.offset - pos - 1));
             return true;
         }
 
-        let (line, column) = (self.line, self.column);
-        let tmp = self.extract_dom_name(false, false, false);
-        if let Option::Some(name) = tmp {
+        let Range(offs, len) = self.find_dom_name(false, false, false);
+        if offs > 0 {
             //let name = (unsafe{String::from_utf8_unchecked(name)}).as_bytes();
-            debug!("dom tag: {:?}", name);
-            self.tok_buf.offer(Token::new(line, column, &self.filename, name, TokenKind::DomTagStart));
+            //            debug!("dom tag: {:?}", name);
+            //self.tok_buf.offer(Token::new(self, TokenKind::DomTagStart, offs, len));
         } else {
             return false;
         }
+
         //属性
         while self.can_forward() {
             self.consume_whitespace();
             debug!("expected dom attr name first char: {:?}", self.current());
             let (line, column) = (self.line, self.column);
-            let tmp = self.extract_dom_name(true, true, true);
-            if let Option::Some(name) = tmp {
-                self.tok_buf.offer(Token::new(line, column, &self.filename, name, TokenKind::DomAttrStart));
+            let Range(offs, len) = self.find_dom_name(true, true, true);
+            if offs > 0 {
+                //self.tok_buf.offer(Token::new(self, TokenKind::DomAttrStart, offs, len));
                 // 扫描属性表达式 name="value"
                 self.consume_whitespace();
                 // 匹配 =
                 if self.current() != ascii::EQS {
                     //如果不匹配则视为独立属性
-                    let (line, column) = (self.line, self.column);
-                    self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset - 1..self.offset], TokenKind::DomAttrEnd));
+                    //self.tok_buf.offer(Token::new(self, TokenKind::DomAttrEnd, self.offset - 1, 1));
                     continue;
                 }
                 let (line, column) = (self.line, self.column);
+                //self.tok_buf.offer(Token::new(self, TokenKind::Symbol, self.offset, 1));
                 //吃掉=和空白
                 self.forward();
-                self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset - 1..self.offset], TokenKind::Symbol));
                 self.consume_whitespace();
                 //匹配字符串
                 if self.current() != ascii::QUO {
                     panic!("期望引号 ，找到 {}", self.current());
                 }
-                let tmp = self.extract_str(ascii::QUO);
-                if let Option::Some(s) = tmp {
+                let Range(offs, len) = self.find_str(ascii::QUO);
+                if offs > 0 {
                     //解析属性值
                     //TODO: 处理扩展语法 &s[..]
-                    let mut ts = Scanner::new(&s[..], "subfile".as_ref(), self.stmt_start, self.stmt_end);
-                    ts.line = self.line;
-                    while let Some(tok) = ts.scan() {
-                        self.tok_buf.offer(tok);
-                    }
-                    let (line, column) = (self.line, self.column);
-                    self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset..self.offset + 1], TokenKind::DomAttrEnd));
+                    let mut ts = Scanner::new(&self.src[offs..self.offset + len], "subfile".as_ref(), self.stmt_start, self.stmt_end);
+                    //                    ts.line = self.line;
+//                    while let Some(tok) = ts.scan() {
+//                        self.tok_buf.offer(tok);
+//                    }
+                    //self.tok_buf.offer(Token::new(self, TokenKind::DomAttrEnd, self.offset, 1));
                 } else {
                     panic!("字符串未结束");
                 }
             }
-            let (line, column) = (self.line, self.column);
             if self.current() == ascii::SLA && self.assert_next(ascii::GTR) {
-                self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset..self.offset + 2], TokenKind::DomTagEnd));
+                //self.tok_buf.offer(Token::new(self, TokenKind::DomTagEnd, self.offset, 2));
                 self.seek(2);
-
                 return true;
             } else if self.current() == ascii::GTR {
-                self.tok_buf.offer(Token::new(line, column, &self.filename, &self.src[self.offset..self.offset + 1], TokenKind::DomTagEnd));
+               // self.tok_buf.offer(Token::new(self, TokenKind::DomTagEnd, self.offset, 1));
                 self.forward();
                 return true;
             }
@@ -434,10 +460,10 @@ impl<'a> Scanner<'a> {
                 break;
             }
             pos = self.offset;
-            if let Some(tok) = self.match_stmt_start() {
-                self.back_pos_diff(pos);
-                break;
-            }
+//            if let Some(tok) = self.match_stmt_start() {
+//                self.back_pos_diff(pos);
+//                break;
+//            }
             //buf.push(self.current());
             self.forward();
         }
@@ -447,7 +473,7 @@ impl<'a> Scanner<'a> {
         //        if self.in_literal {
         //            return Token::Literal(line, column, buf);
         //        }
-        return Some(Token::new(line, column, &self.filename, &self.src[origin..self.offset], TokenKind::Data));
+        return Some(Token::new(self, TokenKind::Data, origin, self.offset - origin));
     }
 }
 

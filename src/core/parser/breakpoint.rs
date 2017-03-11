@@ -29,9 +29,9 @@ impl BreakPoint {
                 let mut buf: Vec<Token> = vec![];
                 for value in &point.values {
                     if let Option::Some(tok) = owner.take() {
-                        if !value.compare(tok.str) {
-                            found = false;
-                        }
+//                        if !value.compare(tok.str) {
+//                            found = false;
+//                        }
                         buf.push(tok);
                     } else {
                         found = false;

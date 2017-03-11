@@ -1,7 +1,8 @@
 pub mod ascii;
-
+use std::fmt::Debug;
 use std::path::Path;
 use std::str::from_utf8_unchecked;
+use std::rc::Rc;
 ///// 用于记录节点位于原代码中的位置，展开(lineNo, column, srcSlice)。
 //#[derive(Debug, Clone)]
 //pub struct Pos<'a> {
@@ -47,37 +48,40 @@ pub enum TokenKind {
 }
 
 /// 定义的源码中最小词法的含义。
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Token<'a> {
     src: &'a Source,
     pub kind: TokenKind,
     pub offset: usize,
     pub len: usize,
-//    pub column: usize,
-//    pub filename: &'a Path,
-//    pub str: &'a [u8],
-//    pub kind: TokenKind,
 }
 
 impl<'a> Token<'a> {
     pub fn src_str(&self) -> &str {
-        unsafe { from_utf8_unchecked(self.str) }
+        unimplemented!()
+//        let s = self.src.content(self);
+//        unsafe { from_utf8_unchecked(s) }
     }
 
     pub fn src_vec(&self) -> Vec<u8> {
+        //let s = self.src.content(self);
         let mut arr: Vec<u8> = Vec::new();
-        arr.extend_from_slice(self.str);
+        //arr.extend_from_slice(s);
         return arr;
     }
 
-    pub fn new(line: usize, column: usize, filename: &'a Path, str: &'a [u8], kind: TokenKind) -> Token<'a> {
-        Token { line: line, column: column, filename: filename, str: str, kind: kind }
+    pub fn new(src: &Source, kind: TokenKind, offset: usize, len: usize) -> Token {
+        Token { src: src, kind: kind, offset: offset, len: len }
     }
 }
+//#[derive(Debug)]
+//pub struct Source<'a>{
+//    pub content: &'a [u8],
+//}
 
-pub trait Source<'a> {
-    fn line(&self, tok: &'a Token) -> usize;
-    fn column(&self, tok: &'a Token) -> usize;
-    fn filename(&self) -> &'a Path;
-    fn content(&self, tok: &'a Token) -> &'a [u8];
+pub trait Source: Debug {//+Sized
+    fn line(&self, tok: &Token) -> usize;
+    fn column(&self, tok: &Token) -> usize;
+    fn filename(&self) -> &Path;
+    fn content(&self, tok: &Token) -> &[u8];
 }
