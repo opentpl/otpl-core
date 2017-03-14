@@ -25,6 +25,16 @@ OTPL 核心库，提供用于解析和编译OTPL语法。
 
 
 
+### 编码规范
+
+1. 文档和注释在确定可以表达清楚的基础上尽可能的用英文，否则请用中文；
+2. 返回表达式，只有一行时才可以省略 `return` 关键字；
+3. 。。。
+
+
+
+
+
 
 //Rustfmt failed at src/data_type.rs:424: line exceeded maximum length (maximum: 100, found: 149) (sorry)
 

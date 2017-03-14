@@ -1,21 +1,10 @@
 pub mod ascii;
+
 use std::fmt::Debug;
 use std::path::Path;
 use std::str::from_utf8_unchecked;
-use std::rc::Rc;
-///// 用于记录节点位于原代码中的位置，展开(lineNo, column, srcSlice)。
-//#[derive(Debug, Clone)]
-//pub struct Pos<'a> {
-//    pub line: usize,
-//    pub column: usize,
-//    pub str: &'a [u8],
-//}
-//
-//impl<'a> Pos<'a> {
-//    pub fn new(line: usize, column: usize, str: &'a [u8]) -> Pos<'a> {
-//        Pos { line: line, column: column, str: str }
-//    }
-//}
+//use std::rc::Rc;
+
 
 //#[derive(Debug, Clone)]
 //pub enum Token<'a> {
@@ -36,8 +25,11 @@ use std::rc::Rc;
 //    DomTagAttrStart(Pos<'a>),
 //    DomTagAttrEnd(Pos<'a>),
 //}
+
+/// 标记的种类
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TokenKind {
+    Any,
     Data,
     Symbol,
     DomTagStart,
@@ -48,40 +40,52 @@ pub enum TokenKind {
 }
 
 /// 定义的源码中最小词法的含义。
+/// Token( [`Source`] , `TokenKind`, start offset, end offset)
 #[derive(Debug)]
-pub struct Token<'a> {
-    src: &'a Source,
-    pub kind: TokenKind,
-    pub offset: usize,
-    pub len: usize,
-}
+pub struct Token(pub TokenKind, pub usize, pub usize);
 
-impl<'a> Token<'a> {
-    pub fn src_str(&self) -> &str {
-        unimplemented!()
-//        let s = self.src.content(self);
-//        unsafe { from_utf8_unchecked(s) }
+impl Token {
+    pub fn kind(&self) -> &TokenKind {
+        &self.0
     }
 
-    pub fn src_vec(&self) -> Vec<u8> {
-        //let s = self.src.content(self);
+    pub fn content_str<'a,T: Source>(&'a self, src: &'a T) -> &'a str {
+        let s = src.content(self);
+        return unsafe { from_utf8_unchecked(s) };
+    }
+
+    pub fn content_vec<T: Source>(&self, src: &T) -> Vec<u8> {
+        let s = src.content(self);
         let mut arr: Vec<u8> = Vec::new();
-        //arr.extend_from_slice(s);
+        arr.extend_from_slice(s);
         return arr;
     }
 
-    pub fn new(src: &Source, kind: TokenKind, offset: usize, len: usize) -> Token {
-        Token { src: src, kind: kind, offset: offset, len: len }
-    }
+//    pub fn new(src: &Source) -> Token {
+//        Token { src: src }
+//    }
 }
-//#[derive(Debug)]
-//pub struct Source<'a>{
-//    pub content: &'a [u8],
-//}
 
-pub trait Source: Debug {//+Sized
-    fn line(&self, tok: &Token) -> usize;
-    fn column(&self, tok: &Token) -> usize;
+/// 定义的要解析的输入源。
+pub trait Source: Debug {
+
+    fn as_ref(&self) -> &Self{
+        self
+    }
+
+    //+Sized
+    /// 获取给定 `Token` 的用于定位源的行号.
+    fn line(&self, offset: usize) -> usize;
+    /// 获取给定 `Token` 的用于定位源的行的开始位置.
+    fn column(&self, offset: usize) -> usize;
+    /// 获取给定 `Token` 的输入源文件名.
+    /// 注意：该文件名只是用于错误提示的定位。
     fn filename(&self) -> &Path;
+    /// 获取给定 `Token` 的内容.
+    /// ```
+    /// return src[tok.offset..tok.offset.3]
+    /// ```
     fn content(&self, tok: &Token) -> &[u8];
+    fn source(&self) -> &[u8];
+    fn get(offset: usize) -> u8;
 }

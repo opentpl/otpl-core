@@ -25,6 +25,7 @@ pub static MUL      : u8 = 42; // *
 pub static SUB      : u8 = 45; // -
 /// 斜杠 /
 pub static SLA      : u8 = 47; // /
+/// 小于号 <
 pub static LSS      : u8 = 60; // <
 /// 等于符号 =
 pub static EQS      : u8 = 61; // =

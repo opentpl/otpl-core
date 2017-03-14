@@ -4,26 +4,26 @@ use super::token::Token;
 
 
 /// 定义的一个语法树的节点集合。
-pub type NodeList<'a> = Vec<Node<'a>>;
+pub type NodeList = Vec<Node>;
 
 /// 定义的一个语法树的分类抽象节点。
 #[derive(Debug)]
-pub enum Node<'a> {
+pub enum Node {
     /// 表是一个用于占位的空节点。
     None,
-    Literal(Token<'a>),
-    Root(Root<'a>),
+    Literal(Token),
+    Root(Root),
     /// 表是一个 DOM 节点，如：div。
-    DomTag(DomTag<'a>),
+    DomTag(DomTag),
 }
 
 #[derive(Debug)]
-pub struct Root<'a> {
-    pub body: NodeList<'a>,
+pub struct Root {
+    pub body: NodeList,
 }
 
-impl<'a> Root<'a> {
-    pub fn new() -> Root<'a> {
+impl Root {
+    pub fn new() -> Root {
         return Root {
             body: vec![],
         };

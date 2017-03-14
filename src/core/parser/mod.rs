@@ -5,64 +5,40 @@ use super::token::TokenKind;
 use super::token::Token;
 use super::scanner::Scanner;
 use super::token::ascii;
-//use std::ops::Index;
-//use std::str::from_utf8_unchecked;
-//use std::cell::RefCell;
-//use std::sync::Arc;
-
-//use util::VecSliceCompare;
-//use util::Queue;
+use super::token::Source;
 
 mod breakpoint;
 
 use self::breakpoint::BreakPoint;
 
-
 pub struct Parser<'a> {
-    scanner: Scanner<'a>,
-    token_buf: Vec<Token<'a>>,
-    breaks: Vec<BreakPoint>,
+    pub scanner: Scanner<'a>,
     break_checkers: Vec<Box<(FnMut(&mut Parser) -> bool)>>,
 }
 
 
 impl<'a> Parser<'a> {
-    pub fn new(scanner: Scanner<'a>) -> Parser {
-        //        let mut scanner = Scanner::new("<div id=\"te\\\"st\">".as_bytes(), "{{".as_bytes(), "}}".as_bytes());
+    pub fn new(scanner: Scanner<'a>) -> Parser<'a> {
         return Parser {
             scanner: scanner,
-            token_buf: vec![],
-            breaks: vec![],
             break_checkers: vec![],
         };
     }
 
-    //    fn peek(&mut self) -> Option<&mut Token>{
-    //        if self.token_buf.is_empty(){
-    //            let tok = self.scanner.scan();
-    //            if let Token::None = tok {
-    //                return Option::None;
-    //            }
-    //            self.token_buf.insert(0, self.scanner.scan());
-    //        }
-    //        let tok = &self.token_buf[self.token_buf.len() - 1];
-    //        return Option::Some(&tok.clone());
+    fn take(&mut self) -> Option<Token> {
+        self.scanner.scan()
+    }
+    fn back(&mut self, tok: Token) {
+        self.scanner.back(tok);
+    }
+
+    //    fn src<T:Source>(&self) -> &T{
+    //       self.scanner.source.as_ref()
     //    }
 
-    fn take(&mut self) -> Option<Token<'a>> {
-        if self.token_buf.is_empty() {
-            return self.scanner.scan();
-        }
-        return self.token_buf.pop();
-    }
-
-    fn back(&mut self, tok: Token<'a>) {
-        self.token_buf.insert(0, tok);
-    }
-
-    fn skip_symbol(&mut self, symbol: Vec<u8>) -> Option<Token<'a>> {
+    fn skip_symbol(&mut self, symbol: Vec<u8>) -> Option<Token> {
         if let Some(tok) = self.take() {
-            if TokenKind::Symbol == tok.kind {
+            if &TokenKind::Symbol == tok.kind() {
                 return Some(tok);
             }
             self.back(tok);
@@ -70,9 +46,9 @@ impl<'a> Parser<'a> {
         return Option::None;
     }
 
-    fn skip_type(&mut self, kind: TokenKind) -> Option<Token<'a>> {
+    fn skip_type(&mut self, kind: TokenKind) -> Option<Token> {
         if let Some(tok) = self.take() {
-            if tok.kind == kind {
+            if tok.kind() == &kind {
                 return Some(tok);
             }
             self.back(tok);
@@ -99,21 +75,21 @@ impl<'a> Parser<'a> {
     }
 
     /// 期望一个类型。如果未找到则产生一个错误。
-    fn expect_type(&mut self, kind: TokenKind) -> Option<Token<'a>> {
+    fn expect_type(&mut self, kind: TokenKind) -> Option<Token> {
         if let Some(tok) = self.take() {
-            if tok.kind == kind {
+            if tok.kind() == &kind {
                 return Some(tok);
             }
-            panic!("expected type {:?}, found {:?}. {:?}", kind, tok.kind, tok);
+            panic!("expected type {:?}, found {:?}. {:?}", kind, *tok.kind(), tok);
             return Option::None;
         }
         panic!("expected type {:?}, but EOF.", kind);
         return Option::None;
     }
 
-    fn parse_dom_attr(&mut self) -> Option<ast::DomAttr<'a>> {
+    fn parse_dom_attr(&mut self) -> Option<ast::DomAttr> {
         if let Some(tok) = self.take() {
-            if TokenKind::DomAttrStart != tok.kind {
+            if &TokenKind::DomAttrStart != tok.kind() {
                 self.back(tok);
                 return Option::None;
             }
@@ -136,40 +112,47 @@ impl<'a> Parser<'a> {
         return Option::None;
     }
 
-    fn parse_dom_tag(&mut self, tok: Token<'a>) -> Option<ast::DomTag<'a>> {
+    fn parse_dom_tag(&mut self, tok: Token) -> Option<ast::DomTag> {
         let mut tag = ast::DomTag::new(tok);
         while let Some(attr) = self.parse_dom_attr() {
             tag.attrs.push(attr);
         }
         //todo: 检查错误
-        let mut parse_children = false;
         if let Some(tok) = self.expect_type(TokenKind::DomTagEnd) {
-            //parse_children = tok.str[0] != ascii::SLA; // 如果不是独立标签 /
+            // 如果不是独立标签 /
+            if self.scanner.source.content(&tok)[0] == ascii::SLA {
+                return Some(tag);
+            }
         } else {
             return Option::None;
         }
-        if !parse_children {
-            return Some(tag);
-        }
+        let name = tag.name.content_vec(self.scanner.source);// 放在这里的原因是因为 所有权移动
         //todo: 考虑，没有按标准来的情况
         self.set_breakpoint(BreakPoint::build(vec![
-            BreakPoint::new(false, vec![vec![ascii::SLA], tag.name.src_vec()]),
+            BreakPoint::new(false, TokenKind::DomTagEnd, vec![vec![ascii::SLA], name]),
         ]));
         self.parse_until(&mut tag.children);
         self.pop_breakpoint();
         return Some(tag);
     }
 
-    fn parse_until(&mut self, buf: &mut ast::NodeList<'a>) {
+    //    fn parse(&mut self) -> ast::Node {
+    //        let node = Node::DomTag(ast::DomTag { name: self.take().unwrap() });
+    //        return node;
+    //    }
+
+    fn parse_until(&mut self, buf: &mut ast::NodeList) {
         while !self.check_breakpoint() {
-            if let Some(tok) = self.take() {
-                match tok.kind {
-                    TokenKind::DomTagStart => {
+            if let Option::Some(tok) = self.take() {
+                //debug!("{:?} {:?}", &tok, String::from_utf8_lossy(self.scanner.source.content(&tok)));
+                match tok.kind() {
+                    &TokenKind::DomTagStart => {
                         if let Some(node) = self.parse_dom_tag(tok) {
                             buf.push(Node::DomTag(node));
                         }
+                        break;
                     }
-                    TokenKind::Data => {
+                    &TokenKind::Data => {
                         buf.push(Node::Literal(tok));
                     }
                     _ => {
@@ -179,12 +162,6 @@ impl<'a> Parser<'a> {
             } else { break; }
         }
     }
-
-    pub fn parse(&mut self) -> ast::Node<'a> {
-        let mut root = ast::Root::new();
-        self.parse_until(&mut root.body);
-        return Node::Root(root);
-    }
 }
 
 #[cfg(test)]
@@ -193,24 +170,28 @@ mod tests {
     use core::scanner::Scanner;
     use core::ast;
     use core::ast::Visitor;
-    use core::token::Token;
+    use core::token::*;
     use std::fs::OpenOptions;
     use std::io::prelude::*;
+    use core::scanner::SourceReader;
+    use std::rc::Rc;
 
-    struct TestVisitor;
+    struct TestVisitor<'a, T: Source + 'a>(&'a T);
 
-    impl<'a> Visitor<'a> for TestVisitor {
+    impl<'a, T: Source> Visitor<'a> for TestVisitor<'a, T> {
         fn visit_dom_tag(&mut self, tag: &'a ast::DomTag) {
-            println!("tag=> {:?}", tag.name.src_str());
+            println!("tag=> {:?}", tag.name.content_str(self.0));
             for attr in &tag.attrs {
-                println!("attr=> {:?}", attr.name.src_str());
+                println!("attr=> {:?}", attr.name.content_str(self.0));
                 println!("value=> ");
                 self.visit_list(&attr.value)
             }
+            println!("children=> ");
             self.visit_list(&tag.children);
+            println!("<=tag {:?}", tag.name.content_str(self.0));
         }
         fn visit_literal(&mut self, tok: &'a Token) {
-            debug!("literal=> {:?}", tok.src_str());
+            debug!("literal=> {:?}", tok.content_str(self.0));
         }
     }
 
@@ -225,12 +206,18 @@ mod tests {
                 let mut buf = Vec::new();
                 f.read_to_end(&mut buf);
                 println!("{:?}", f);
-                let mut scanner = Scanner::new(&buf,"test.html".as_ref(), "{{".as_bytes(), "}}".as_bytes());
+                let mut si = SourceReader(&buf, "test.html".as_ref(), 0, vec![]);
+
+                let mut root: ast::NodeList = vec![];
+                //                {
+                let mut scanner = Scanner::new(&mut si);
                 let mut parser = Parser::new(scanner);
-                let root = parser.parse();
+                parser.parse_until(&mut root);
+                //                }
+                //let x = parser.parse();
                 println!("Parse Done! ==============================");
-                let mut visitor = TestVisitor;
-                visitor.visit(&root);
+                let mut visitor = TestVisitor(&*parser.scanner.source);
+                visitor.visit_list(&root);
                 println!("Visit Done! ==============================");
             }
         }
