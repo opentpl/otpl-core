@@ -32,11 +32,18 @@ pub enum TokenKind {
     Any,
     Data,
     Symbol,
+    String,
+    Int,
+    Ident,
     DomTagStart,
     DomTagEnd,
     DomAttrStart,
     DomAttrEnd,
     DomCTag,
+    DomComment,
+    LDelimiter,
+    RDelimiter,
+    Literal,
 }
 
 /// 定义的源码中最小词法的含义。
