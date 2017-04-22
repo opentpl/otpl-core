@@ -27,7 +27,7 @@ pub struct Scanner<'a> {
 }
 
 /// 符号表
-static symbols: [u8; 16] = [
+static SYMBOLS: [u8; 16] = [
     '+' as u8,
     '-' as u8,
     '*' as u8,
@@ -48,7 +48,7 @@ static symbols: [u8; 16] = [
 
 #[allow(dead_code)]
 impl<'a> Scanner<'a> {
-    pub fn new(source: &'a mut SourceReader<'a>) -> Scanner<'a> {
+    pub fn new(source: &'a mut SourceReader<'a>) -> Scanner {
         let mut ist = Scanner {
             stmt_start: "{{".as_bytes(),
             stmt_end: "}}".as_bytes(),
@@ -275,8 +275,8 @@ impl<'a> Scanner<'a> {
         if is_whitespace(ch) {
             return true;
         }
-        for i in 0..symbols.len() {
-            if ch == symbols[i] {
+        for i in 0..SYMBOLS.len() {
+            if ch == SYMBOLS[i] {
                 return true;
             }
         }

@@ -89,9 +89,6 @@ pub trait Source: Debug {
     /// 注意：该文件名只是用于错误提示的定位。
     fn filename(&self) -> &Path;
     /// 获取给定 `Token` 的内容.
-    /// ```
-    /// return src[tok.offset..tok.offset.3]
-    /// ```
     fn content(&self, tok: &Token) -> &[u8];
     fn source(&self) -> &[u8];
     fn get(offset: usize) -> u8;

@@ -10,7 +10,7 @@ pub type NodeList = Vec<Node>;
 #[derive(Debug)]
 pub enum Node {
     /// 表是一个用于占位的空节点。
-    None,
+    Empty,
     Literal(Token),
     Root(Root),
     /// 表是一个 DOM 节点，如：div。

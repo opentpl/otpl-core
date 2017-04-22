@@ -18,7 +18,7 @@ pub struct Parser<'a> {
 
 
 impl<'a> Parser<'a> {
-    pub fn new(scanner: Scanner<'a>) -> Parser<'a> {
+    pub fn new(scanner: Scanner<'a>) -> Parser {
         return Parser {
             scanner: scanner,
             break_checkers: vec![],
@@ -75,16 +75,14 @@ impl<'a> Parser<'a> {
     }
 
     /// 期望一个类型。如果未找到则产生一个错误。
-    fn expect_type(&mut self, kind: TokenKind) -> Option<Token> {
+    fn expect_type(&mut self, kind: TokenKind) -> Result<Token, String> {
         if let Some(tok) = self.take() {
             if tok.kind() == &kind {
-                return Some(tok);
+                return Ok(tok);
             }
-            panic!("expected type {:?}, found {:?}. {:?}", kind, *tok.kind(), tok);
-            return Option::None;
+            return Err(format!("expected type {:?}, found {:?}. {:?}", kind, *tok.kind(), tok));
         }
-        panic!("expected type {:?}, but EOF.", kind);
-        return Option::None;
+        return Err(format!("expected type {:?}, but EOF.", kind));
     }
 
     fn parse_dom_attr(&mut self) -> Option<ast::DomAttr> {
@@ -105,7 +103,8 @@ impl<'a> Parser<'a> {
                 self.parse_until(&mut node.value);
                 self.pop_breakpoint();
             }
-            if let Some(tok) = self.expect_type(TokenKind::DomAttrEnd) {
+
+            if self.expect_type(TokenKind::DomAttrEnd).is_ok() {
                 return Some(node);
             }
         }
@@ -118,7 +117,7 @@ impl<'a> Parser<'a> {
             tag.attrs.push(attr);
         }
         //todo: 检查错误
-        if let Some(tok) = self.expect_type(TokenKind::DomTagEnd) {
+        if let Ok(tok) = self.expect_type(TokenKind::DomTagEnd) {
             // 如果不是独立标签 /
             if self.scanner.source.content(&tok)[0] == ascii::SLA {
                 return Some(tag);
@@ -127,7 +126,7 @@ impl<'a> Parser<'a> {
             return Option::None;
         }
         let name = tag.name.content_vec(self.scanner.source);// 放在这里的原因是因为 所有权移动
-        //todo: 考虑，没有按标准来的情况
+        //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
             BreakPoint::new(false, TokenKind::DomTagEnd, vec![vec![ascii::SLA], name]),
         ]));
@@ -136,10 +135,6 @@ impl<'a> Parser<'a> {
         return Some(tag);
     }
 
-    //    fn parse(&mut self) -> ast::Node {
-    //        let node = Node::DomTag(ast::DomTag { name: self.take().unwrap() });
-    //        return node;
-    //    }
 
     fn parse_until(&mut self, buf: &mut ast::NodeList) {
         while !self.check_breakpoint() {
@@ -162,7 +157,14 @@ impl<'a> Parser<'a> {
             } else { break; }
         }
     }
+
+    pub fn parse(&mut self) -> ast::Node {
+        let mut root = ast::Root::new();
+        self.parse_until(&mut root.body);
+        return Node::Root(root);
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -195,6 +197,13 @@ mod tests {
         }
     }
 
+    fn parse(sr:& mut SourceReader) -> ast::Node{
+        let mut scanner = Scanner::new(sr);
+        // let mut parser = Parser::new(scanner);
+        // parser.parse();
+        return ast::Node::Empty;
+    }
+
     #[test]
     fn test_parse() {
         let mut options = OpenOptions::new().read(true).open("./src/core/scanner/test.html");
@@ -206,18 +215,13 @@ mod tests {
                 let mut buf = Vec::new();
                 f.read_to_end(&mut buf);
                 println!("{:?}", f);
-                let mut si = SourceReader(&buf, "test.html".as_ref(), 0, vec![]);
-
-                let mut root: ast::NodeList = vec![];
-                //                {
-                let mut scanner = Scanner::new(&mut si);
+                let mut sr = SourceReader(&buf, "test.html".as_ref(), 0, vec![]);
+                let mut scanner = Scanner::new(&mut sr);
                 let mut parser = Parser::new(scanner);
-                parser.parse_until(&mut root);
-                //                }
-                //let x = parser.parse();
+                let root = parser.parse();
                 println!("Parse Done! ==============================");
                 let mut visitor = TestVisitor(&*parser.scanner.source);
-                visitor.visit_list(&root);
+                visitor.visit(&root);
                 println!("Visit Done! ==============================");
             }
         }

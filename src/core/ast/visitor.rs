@@ -17,7 +17,7 @@ pub trait Visitor<'a> {
     #[allow(unused_variables)]
     fn visit_undefined(&mut self, node: &'a Node){
         match node {
-            &Node::None  => {},
+            &Node::Empty  => {},
             _ => println!("warning: undefined visit node {:?}", node)
         }
     }
