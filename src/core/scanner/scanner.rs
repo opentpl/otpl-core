@@ -5,26 +5,6 @@ use super::SourceReader;
 
 struct Range(usize, usize);
 
-#[derive(Debug)]
-pub struct Scanner<'a> {
-    // immutable state ->
-    /// OTPL定界符开始
-    stmt_start: &'a [u8],
-    /// OTPL定界符结束
-    stmt_end: &'a [u8],
-
-    // scanning state ->
-    /// character offset
-    offset: usize,
-    /// current character. NOTE: only check ASCII characters.
-    ch: u8,
-    /// 是否处于OTPL段
-    in_stmt: bool,
-    /// 是否要解析xhtml
-    is_parse_xhtml: bool,
-    tok_buf: Vec<Token>,
-    pub source: &'a mut SourceReader<'a>,
-}
 
 /// 符号表
 static SYMBOLS: [u8; 16] = [
@@ -46,14 +26,29 @@ static SYMBOLS: [u8; 16] = [
     ',' as u8,
 ];
 
+#[derive(Debug)]
+pub struct Scanner<'a, 'b: 'a> {
+    // immutable state ->
+    /// OTPL定界符开始
+    stmt_start: &'a [u8],
+    /// OTPL定界符结束
+    stmt_end: &'a [u8],
+
+    // scanning state ->
+    in_stmt: bool,
+    /// 是否要解析xhtml
+    is_parse_xhtml: bool,
+    tok_buf: Vec<Token>,
+    pub source: &'a mut SourceReader<'b>,
+}
+
 #[allow(dead_code)]
-impl<'a> Scanner<'a> {
-    pub fn new(source: &'a mut SourceReader<'a>) -> Scanner {
+impl<'a, 'b: 'a> Scanner<'a, 'b> {
+    pub fn new(source: &'a mut SourceReader<'b>) -> Scanner<'a, 'b> {
+        //panic!("ff");
         let mut ist = Scanner {
             stmt_start: "{{".as_bytes(),
             stmt_end: "}}".as_bytes(),
-            offset: 0,
-            ch: '\0' as u8,
             in_stmt: false,
             is_parse_xhtml: true,
             tok_buf: vec![],
@@ -252,16 +247,16 @@ impl<'a> Scanner<'a> {
     }
 
     fn find_delimiter(&mut self, kind: TokenKind) -> Option<Token> {
-        if (kind == TokenKind::LDelimiter && self.ch != self.stmt_start[0])
-            || (kind == TokenKind::RDelimiter && self.ch != self.stmt_end[0]) {
+        if (kind == TokenKind::LDelimiter && self.source.current() != self.stmt_start[0])
+            || (kind == TokenKind::RDelimiter && self.source.current() != self.stmt_end[0]) {
             return Option::None;
         }
         //内部方法，不做过多的判断
 
-        let pos = self.offset;
+        let pos = self.source.offset();
         for i in 0..self.stmt_start.len() {
-            if (kind == TokenKind::LDelimiter && self.ch != self.stmt_start[i])
-                || (kind == TokenKind::RDelimiter && self.ch != self.stmt_end[i]) {
+            if (kind == TokenKind::LDelimiter && self.source.current() != self.stmt_start[i])
+                || (kind == TokenKind::RDelimiter && self.source.current() != self.stmt_end[i]) {
                 self.source.back_pos_diff(pos);
                 return Option::None;
             }

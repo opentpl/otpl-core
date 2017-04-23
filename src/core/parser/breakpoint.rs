@@ -18,8 +18,8 @@ impl BreakPoint {
         BreakPoint { keep: keep, kind: kind, values: values }
     }
 
-    pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> bool)> {
-        return Box::new(move |owner: &mut Parser| -> bool {
+    pub fn build<T:super::Scanner2>(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser<T>) -> bool)> {
+        return Box::new(move |owner: &mut Parser<T>| -> bool {
             let mut found;
             for point in &breaks {
                 if point.values.is_empty() {
@@ -29,7 +29,7 @@ impl BreakPoint {
                 let mut buf: Vec<Token> = vec![];
                 for value in &point.values {
                     if let Option::Some(tok) = owner.take() {
-                        if (point.kind != TokenKind::Any && &point.kind != tok.kind()) || !value.compare(owner.scanner.source.content(&tok)) {
+                        if (point.kind != TokenKind::Any && &point.kind != tok.kind()) || !value.compare(owner.scanner.content(&tok)) {//
                             found = false;
                         }
                         buf.push(tok);
