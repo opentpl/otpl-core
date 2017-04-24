@@ -209,8 +209,8 @@ mod tests {
 
     struct TestVisitor<'a, T: 'a>(&'a T);
 
-    impl<'a, T: Source> Visitor<'a> for TestVisitor<'a, T> {
-        fn visit_dom_tag(&mut self, tag: &'a ast::DomTag) {
+    impl<'a, T: Source> Visitor for TestVisitor<'a, T> {
+        fn visit_dom_tag(&mut self, tag: &ast::DomTag) {
             println!("tag=> {:?}", tag.name.content_str(self.0));
             for attr in &tag.attrs {
                 println!("attr=> {:?}", attr.name.content_str(self.0));
@@ -221,7 +221,7 @@ mod tests {
             self.visit_list(&tag.children);
             println!("<=tag {:?}", tag.name.content_str(self.0));
         }
-        fn visit_literal(&mut self, tok: &'a Token) {
+        fn visit_literal(&mut self, tok: &Token) {
             debug!("literal=> {:?}", tok.content_str(self.0));
         }
     }
