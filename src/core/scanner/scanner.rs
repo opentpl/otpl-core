@@ -135,7 +135,7 @@ impl<'a, 'b: 'a> Scanner<'a, 'b> {
     }
 
     fn err(&self, fmt: String, offs: usize) {
-        panic!("{} at xxxx({}:{})", fmt, self.source.line(offs), self.source.column(offs));
+        panic!("{} at {:?}({}:{})", fmt, self.source.filename(), self.source.line(offs), self.source.column(offs));
     }
 
     /// 扫描 dom 节点，并暂存。注意：该方法不自动回溯。

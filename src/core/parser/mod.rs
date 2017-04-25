@@ -180,7 +180,7 @@ impl<T: Scanner2> Parser<T> {
                         buf.push(Node::Literal(tok));
                     }
                     _ => {
-                        debug!("no parsing token: {:?}", tok);
+                        debug!("TODO: no parsing token: {:?}", tok);
                     }
                 }
             } else { break; }
@@ -252,7 +252,7 @@ mod tests {
         }
         //
 
-        let mut sr = SourceReader(&buf, "test.html".as_ref(), 0, vec![]);
+        let mut sr = SourceReader(&buf, "source".as_ref(), 0, vec![]);
         {
             let root = parse(&mut sr);
             let mut visitor = TestVisitor(&sr);

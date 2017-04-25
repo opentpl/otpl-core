@@ -33,7 +33,7 @@ impl<'a> Source for SourceReader<'a> {
     }
 
     fn filename(&self) -> &Path {
-        unimplemented!()
+        self.1
     }
 
     fn content(&self, tok: &Token) -> &[u8] {
@@ -44,9 +44,9 @@ impl<'a> Source for SourceReader<'a> {
         unimplemented!()
     }
 
-    fn get(offset: usize) -> u8 {
-        unimplemented!()
-    }
+//    fn get(offset: usize) -> u8 {
+//        unimplemented!()
+//    }
 }
 
 impl<'a> SourceReader<'a> {

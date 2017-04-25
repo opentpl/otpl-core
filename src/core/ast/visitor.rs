@@ -31,6 +31,7 @@ pub trait Visitor {
             self.visit(&n);
         }
     }
+    /// 访问字面量
     fn visit_literal(&mut self, tok: &Token);
     /// 访问 DomTag
     fn visit_dom_tag(&mut self, tag: &DomTag);
