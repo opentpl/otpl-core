@@ -1,7 +1,5 @@
-mod scanner;
 mod bytes_scanner;
 
-pub use self::scanner::Scanner;
 pub use self::bytes_scanner::BytesScanner;
 use core::token::Token;
 use std::fmt::Debug;
@@ -32,4 +30,10 @@ pub trait Source: Debug {
         arr.extend_from_slice(s);
         return arr;
     }
+}
+
+pub trait Scanner: Debug {
+    fn back(&mut self, tok: Token);
+    fn scan(&mut self) -> Result<Token, String>;
+    fn source(&self) -> &Source;
 }
