@@ -1,6 +1,5 @@
-//use super::Node;
+use core::token::Token;
 use super::NodeList;
-use super::token::Token;
 
 /// 表示一个 DOM 节点的标签，如： div。
 #[derive(Debug)]
