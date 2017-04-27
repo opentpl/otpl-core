@@ -1,7 +1,7 @@
 use super::Parser;
-use core::token::{Token, TokenKind, Source};
+use core::token::{Token, TokenKind}; //, Source
 use util::VecSliceCompare;
-use util::Queue;
+//use util::Queue;
 
 /// 定义用于解析过程中的断点。
 pub struct BreakPoint {
@@ -18,8 +18,8 @@ impl BreakPoint {
         BreakPoint { keep: keep, kind: kind, values: values }
     }
 
-    pub fn build<T:super::Scanner2>(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser<T>) -> bool)> {
-        return Box::new(move |owner: &mut Parser<T>| -> bool {
+    pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> bool)> {
+        return Box::new(move |owner: &mut Parser| -> bool {
             let mut found;
             for point in &breaks {
                 if point.values.is_empty() {
@@ -29,7 +29,8 @@ impl BreakPoint {
                 let mut buf: Vec<Token> = vec![];
                 for value in &point.values {
                     if let Option::Some(tok) = owner.take() {
-                        if (point.kind != TokenKind::Any && &point.kind != tok.kind()) || !value.compare(owner.scanner.content(&tok)) {//
+                        if (point.kind != TokenKind::Any && &point.kind != tok.kind()) || !value.compare(owner.scanner.source().content(&tok)) {
+                            //
                             found = false;
                         }
                         buf.push(tok);

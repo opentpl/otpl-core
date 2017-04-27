@@ -1,53 +1,20 @@
 use super::ast;
-use super::ast::Node;
-use super::ast::NodeList;
-use super::token::TokenKind;
-use super::token::Token;
-use super::scanner::Scanner;
+use super::ast::{Node, NodeList};
+use super::token::{Token, TokenKind};
+use super::scanner::{Scanner};
 use super::token::ascii;
-use super::token::Source;
 
 mod breakpoint;
 
-//unimplemented!()
-use self::breakpoint::BreakPoint;
+pub use self::breakpoint::BreakPoint;
 
-pub trait Scanner2 {
-    fn back(&mut self, tok: Token);
-    fn scan(&mut self) -> Option<Token>;
-
-    fn content(&self, tok: &Token) -> &[u8];
-    fn content_vec(&self, tok: &Token) -> Vec<u8>;
+pub struct Parser<'a> {
+    scanner: &'a mut Scanner,
+    break_checkers: Vec<Box<(FnMut(&mut Parser) -> bool)>>,
 }
 
-impl<'a, 'b: 'a> Scanner2 for Scanner<'a, 'b> {
-    fn back(&mut self, tok: Token) {
-        self.back(tok);
-    }
-
-    fn scan(&mut self) -> Option<Token> {
-        self.scan()
-    }
-    fn content(&self, tok: &Token) -> &[u8] {
-        self.source.content(tok)
-    }
-    fn content_vec(&self, tok: &Token) -> Vec<u8> {
-        let s = self.source.content(tok);
-        let mut arr: Vec<u8> = Vec::new();
-        arr.extend_from_slice(s);
-        return arr;
-    }
-}
-
-
-pub struct Parser<T> {
-    scanner: T,
-    break_checkers: Vec<Box<(FnMut(&mut Parser<T>) -> bool)>>,
-}
-
-
-impl<T: Scanner2> Parser<T> {
-    pub fn new(scanner: T) -> Parser<T> {
+impl<'a> Parser<'a> {
+    pub fn new(scanner: &mut Scanner) -> Parser {
         return Parser {
             scanner: scanner,
             break_checkers: vec![],
@@ -55,15 +22,19 @@ impl<T: Scanner2> Parser<T> {
     }
 
     fn take(&mut self) -> Option<Token> {
-        self.scanner.scan()
+        let tok = self.scanner.scan().unwrap();
+        match tok.kind() {
+            &TokenKind::EOF => {
+                return None;
+            }
+            _ => {}
+        }
+        Some(tok)
     }
     fn back(&mut self, tok: Token) {
         self.scanner.back(tok);
     }
 
-    //    fn src<T:Source>(&self) -> &T{
-    //       self.scanner.source.as_ref()
-    //    }
 
     fn skip_symbol(&mut self, symbol: Vec<u8>) -> Option<Token> {
         if let Some(tok) = self.take() {
@@ -85,11 +56,11 @@ impl<T: Scanner2> Parser<T> {
         return Option::None;
     }
 
-    fn set_breakpoint(&mut self, checker: Box<(FnMut(&mut Parser<T>) -> bool)>) {
+    fn set_breakpoint(&mut self, checker: Box<(FnMut(&mut Parser) -> bool)>) {
         self.break_checkers.push(checker);
     }
 
-    fn pop_breakpoint(&mut self) -> Option<Box<(FnMut(&mut Parser<T>) -> bool)>> {
+    fn pop_breakpoint(&mut self) -> Option<Box<(FnMut(&mut Parser) -> bool)>> {
         self.break_checkers.pop()
     }
 
@@ -122,7 +93,7 @@ impl<T: Scanner2> Parser<T> {
             }
             let mut node = ast::DomAttr::new(tok);
             if let Some(tok) = self.skip_symbol(vec![ascii::EQS]) {
-                self.set_breakpoint(Box::new(|owner: &mut Parser<T>| -> bool {
+                self.set_breakpoint(Box::new(|owner: &mut Parser| -> bool {
                     if let Option::Some(tok) = owner.skip_type(TokenKind::DomAttrEnd) {
                         owner.back(tok); // 保留以方便后面检查结束
                         return true;
@@ -148,13 +119,13 @@ impl<T: Scanner2> Parser<T> {
         //todo: 检查错误
         if let Ok(tok) = self.expect_type(TokenKind::DomTagEnd) {
             // 如果不是独立标签 /
-            if self.scanner.content(&tok)[0] == ascii::SLA {
+            if self.scanner.source().content(&tok)[0] == ascii::SLA {
                 return Some(tag);
             }
         } else {
             return Option::None;
         }
-        let name = self.scanner.content_vec(&tag.name);// 放在这里的原因是因为 所有权移动
+        let name = self.scanner.source().content_vec(&tag.name);// 放在这里的原因是因为 所有权移动
         //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
             BreakPoint::new(false, TokenKind::DomTagEnd, vec![vec![ascii::SLA], name]),
@@ -165,10 +136,10 @@ impl<T: Scanner2> Parser<T> {
     }
 
 
-    fn parse_until(&mut self, buf: &mut ast::NodeList) {
+    fn parse_until(&mut self, buf: &mut NodeList) {
         while !self.check_breakpoint() {
             if let Option::Some(tok) = self.take() {
-                //debug!("{:?} {:?}", &tok, String::from_utf8_lossy(self.scanner.source.content(&tok)));
+                //debug!("{:?} {:?}", &tok, self.scanner.source().content(&tok));
                 match tok.kind() {
                     &TokenKind::DomTagStart => {
                         if let Some(node) = self.parse_dom_tag(tok) {
@@ -197,44 +168,33 @@ impl<T: Scanner2> Parser<T> {
 #[cfg(test)]
 mod tests {
     use super::Parser;
-    use core::scanner::Scanner;
+    use core::scanner::{BytesScanner, Source};
     use core::ast;
     use core::ast::Visitor;
-    use core::token::*;
+    use core::token::Token;
     use std::fs::OpenOptions;
     use std::io::prelude::*;
-    use core::scanner::SourceReader;
-    use std::cell::{Ref, RefCell};
+    //    use core::scanner::SourceReader;
+    //    use std::cell::{Ref, RefCell};
 
 
-    struct TestVisitor<'a, T: 'a>(&'a T);
+    struct TestVisitor<'a>(&'a Source);
 
-    impl<'a, T: Source> Visitor for TestVisitor<'a, T> {
+    impl<'a> Visitor for TestVisitor<'a> {
         fn visit_dom_tag(&mut self, tag: &ast::DomTag) {
-            println!("tag=> {:?}", tag.name.content_str(self.0));
+            println!("tag=> {:?}", self.0.content_str(&tag.name));
             for attr in &tag.attrs {
-                println!("attr=> {:?}", attr.name.content_str(self.0));
+                println!("attr=> {:?}", self.0.content_str(&attr.name));
                 println!("value=> ");
                 self.visit_list(&attr.value)
             }
             println!("children=> ");
             self.visit_list(&tag.children);
-            println!("<=tag {:?}", tag.name.content_str(self.0));
+            println!("<=tag {:?}", self.0.content_str(&tag.name));
         }
         fn visit_literal(&mut self, tok: &Token) {
-            debug!("literal=> {:?}", tok.content_str(self.0));
+            debug!("literal=> {:?}", self.0.content_str(tok));
         }
-    }
-
-    fn parse(sr: &mut SourceReader) -> ast::Node {
-        let mut scanner = Scanner::new(sr);
-        let mut parser = Parser::new(scanner);
-        return parser.parse();
-        // return ast::Node::Empty;
-    }
-
-    fn visit<'a, T: Source>(sr: &'a T) {
-        let mut visitor = TestVisitor(sr);
     }
 
     #[test]
@@ -247,21 +207,22 @@ mod tests {
             }
             Ok(ref mut f) => {
                 f.read_to_end(&mut buf);
-                println!("打开文件：{:?}", f);
+                //println!("打开文件：{:?}", f);
             }
         }
         //
 
-        let mut sr = SourceReader(&buf, "source".as_ref(), 0, vec![]);
+        let mut scanner = BytesScanner::new(&buf, "source".as_ref());
+        let root: ast::Node;
         {
-            let root = parse(&mut sr);
-            let mut visitor = TestVisitor(&sr);
-            visitor.visit(&root);
+            let mut parser = Parser::new(&mut scanner);
+            root = parser.parse();
             println!("Parse Done! ==============================");
         }
 
         {
-            //visit(&sr);
+            let mut visitor = TestVisitor(&scanner);
+            visitor.visit(&root);
             println!("Visit Done! ==============================");
         }
         //end

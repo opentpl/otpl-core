@@ -10,9 +10,9 @@ pub struct DomTag {
     pub children: NodeList,
 }
 
-impl  DomTag{
+impl DomTag {
     pub fn new(name: Token) -> DomTag {
-        return DomTag{
+        return DomTag {
             name: name,
             attrs: vec![],
             children: vec![],
@@ -27,9 +27,9 @@ pub struct DomAttr {
     pub value: NodeList,
 }
 
-impl  DomAttr{
+impl DomAttr {
     pub fn new(name: Token) -> DomAttr {
-        return DomAttr{
+        return DomAttr {
             name: name,
             value: vec![],
         };

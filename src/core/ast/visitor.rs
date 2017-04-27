@@ -1,9 +1,8 @@
-use super::*;
+use super::{Node, Root, NodeList, DomTag};
 use core::token::Token;
 
 /// 定义一个用于访问AST节点的一组方法。
 pub trait Visitor {
-
     /// 访问分类抽象节点。
     fn visit(&mut self, node: &Node) {
         match node {
@@ -15,18 +14,18 @@ pub trait Visitor {
     }
     /// 访问未在本访问器定义的 Node。
     #[allow(unused_variables)]
-    fn visit_undefined(&mut self, node: &Node){
+    fn visit_undefined(&mut self, node: &Node) {
         match node {
-            &Node::Empty  => {},
+            &Node::Empty => {}
             _ => println!("warning: undefined visit node {:?}", node)
         }
     }
-    fn visit_root(&mut self, root:&Root) {
+    fn visit_root(&mut self, root: &Root) {
         for n in &root.body {
             self.visit(&n);
         }
     }
-    fn visit_list(&mut self, list:&NodeList) {
+    fn visit_list(&mut self, list: &NodeList) {
         for n in list {
             self.visit(&n);
         }
