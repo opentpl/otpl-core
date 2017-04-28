@@ -1,7 +1,7 @@
-use super::Parser;
-use core::token::{Token, TokenKind}; //, Source
+use core::token::{Token, TokenKind};
+use core::{Error, Result};
 use util::VecSliceCompare;
-//use util::Queue;
+use super::Parser;
 
 /// 定义用于解析过程中的断点。
 pub struct BreakPoint {
@@ -18,8 +18,8 @@ impl BreakPoint {
         BreakPoint { keep: keep, kind: kind, values: values }
     }
 
-    pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> bool)> {
-        return Box::new(move |owner: &mut Parser| -> bool {
+    pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> Result<()>)> {
+        return Box::new(move |parser: &mut Parser| -> Result<()> {
             let mut found;
             for point in &breaks {
                 if point.values.is_empty() {
@@ -28,28 +28,32 @@ impl BreakPoint {
                 found = true;
                 let mut buf: Vec<Token> = vec![];
                 for value in &point.values {
-                    if let Option::Some(tok) = owner.take() {
-                        if (point.kind != TokenKind::Any && &point.kind != tok.kind()) || !value.compare(owner.scanner.source().content(&tok)) {
-                            //
-                            found = false;
+                    match parser.take().and_then(|tok| -> Result<()>{
+                        if (point.kind != TokenKind::Any && &point.kind != tok.kind())
+                            || !value.compare(parser.scanner.source().content(&tok)) {
+                            buf.push(tok);
+                            return Err(Error::None);
                         }
                         buf.push(tok);
-                    } else {
-                        found = false;
+                        return Ok(());
+                    }) {
+                        Ok(_) => {}
+                        Err(Error::None) => { found = false; }
+                        err => { return err; }
                     }
+
                     if !found { break; }
                 }
+
                 if !found || point.keep {
                     while !buf.is_empty() {
-                        owner.back(buf.pop().unwrap());
+                        parser.back(buf.pop().unwrap());
                     }
                 }
 
-                if found {
-                    return found;
-                }
+                if found { return Ok(()); }
             }
-            return false;
+            return Err(Error::None);
         });
     }
 }

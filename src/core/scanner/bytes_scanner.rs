@@ -3,6 +3,7 @@ use std::path::Path;
 use core::token::{ascii, TokenKind, Token};
 use core::token::ascii::{is_digit, is_whitespace, is_upper_letter, is_lower_letter};
 use util::{BinarySearch, Queue};
+use core::{Error, Result};
 
 /// 符号表
 static SYMBOLS: [u8; 16] = [
@@ -120,11 +121,11 @@ impl<'a> BytesScanner<'a> {
     #[allow(unused_variables)]
     fn seek(&mut self, n: isize) {
         if n < 0 {
-            for i in 0..n.abs() {
+            for _ in 0..n.abs() {
                 self.back()
             }
         } else if n > 0 {
-            for i in 0..n {
+            for _ in 0..n {
                 self.forward();
             }
         }
@@ -162,8 +163,8 @@ impl<'a> BytesScanner<'a> {
         }));
     }
 
-    fn err(&self, fmt: String, offs: usize) -> String {
-        format!("{} at {:?}({}:{})", fmt, self.filename(), self.line(offs), self.column(offs))
+    fn err(&self, fmt: String, offs: usize) -> Error {
+        Error::Message(format!("{} at {:?}({}:{})", fmt, self.filename(), self.line(offs), self.column(offs)))
     }
 
     // ------------------>
@@ -237,7 +238,7 @@ impl<'a> BytesScanner<'a> {
     }
 
     /// 扫描OTPL代码
-    fn scan_stmt(&mut self) -> Result<Token, String> {
+    fn scan_stmt(&mut self) -> Result<Token> {
         let ch = self.ch;
         match ch {
             //扫描字符串
@@ -412,7 +413,7 @@ impl<'a> BytesScanner<'a> {
     }
 
     /// 扫描 dom 节点，并暂存。注意：该方法不自动回溯。
-    fn scan_dom(&mut self) -> Result<bool, String> {
+    fn scan_dom(&mut self) -> Result<bool> {
         //匹配 <
         if self.ch != ascii::LSS || !self.forward() {
             return Ok(false);
@@ -512,12 +513,12 @@ impl<'a> BytesScanner<'a> {
     }
 
     /// 扫描下一个
-    fn scan_next(&mut self) -> Result<Token, String> {
+    fn scan_next(&mut self) -> Result<Token> {
         if !self.tok_buf.is_empty() {
             return Ok(self.tok_buf.take().unwrap());
         }
         if self.ch == ascii::EOF {
-            return Ok(Token(TokenKind::EOF, 0, 0));
+            return Err(Error::EOF);
         }
 
         if self.in_stmt {
@@ -622,7 +623,7 @@ impl<'a> Scanner for BytesScanner<'a> {
         self.tok_buf.push(tok);
     }
 
-    fn scan(&mut self) -> Result<Token, String> {
+    fn scan(&mut self) -> Result<Token> {
         self.scan_next()
     }
 

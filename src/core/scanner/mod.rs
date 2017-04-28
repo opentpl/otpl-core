@@ -1,6 +1,7 @@
 mod bytes_scanner;
 
 pub use self::bytes_scanner::BytesScanner;
+use core::{Error, Result};
 use core::token::Token;
 use std::fmt::Debug;
 use std::path::Path;
@@ -34,6 +35,6 @@ pub trait Source: Debug {
 
 pub trait Scanner: Debug {
     fn back(&mut self, tok: Token);
-    fn scan(&mut self) -> Result<Token, String>;
+    fn scan(&mut self) -> Result<Token>;
     fn source(&self) -> &Source;
 }
