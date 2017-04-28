@@ -1,10 +1,10 @@
 extern crate libotpl;
 
-use libotpl::core::parser::Parser;
-use libotpl::core::scanner::{BytesScanner, Source};
-use libotpl::core::ast;
-use libotpl::core::ast::Visitor;
-use libotpl::core::token::Token;
+use libotpl::parser::Parser;
+use libotpl::scanner::{BytesScanner, Source};
+use libotpl::ast;
+use libotpl::ast::Visitor;
+use libotpl::token::Token;
 use std::fs::OpenOptions;
 use std::path::{Path};
 use std::io::prelude::*;
@@ -42,7 +42,7 @@ fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
 
 #[test]
 fn test_dom() {
-    let buf = read_file("./src/core/scanner/test.html");
+    let buf = read_file("./src/scanner/test.html");
     //
 
     let mut scanner = BytesScanner::new(&buf, "source".as_ref());

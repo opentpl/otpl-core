@@ -1,8 +1,8 @@
 mod bytes_scanner;
 
 pub use self::bytes_scanner::BytesScanner;
-use core::{Error, Result};
-use core::token::Token;
+use {Error, Result};
+use token::Token;
 use std::fmt::Debug;
 use std::path::Path;
 use std::str::from_utf8_unchecked;

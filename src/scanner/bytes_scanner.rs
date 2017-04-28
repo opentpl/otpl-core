@@ -1,9 +1,9 @@
 use super::{Scanner, Source};
 use std::path::Path;
-use core::token::{ascii, TokenKind, Token};
-use core::token::ascii::{is_digit, is_whitespace, is_upper_letter, is_lower_letter};
+use token::{ascii, TokenKind, Token};
+use token::ascii::{is_digit, is_whitespace, is_upper_letter, is_lower_letter};
 use util::{BinarySearch, Queue};
-use core::{Error, Result};
+use {Error, Result};
 
 /// 符号表
 static SYMBOLS: [u8; 16] = [

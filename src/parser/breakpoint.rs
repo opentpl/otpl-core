@@ -1,5 +1,5 @@
-use core::token::{Token, TokenKind};
-use core::{Error, Result};
+use token::{Token, TokenKind};
+use {Error, Result};
 use util::VecSliceCompare;
 use super::Parser;
 

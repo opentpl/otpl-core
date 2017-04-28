@@ -1,5 +1,5 @@
 use super::{Node, Root, NodeList, DomTag};
-use core::token::Token;
+use token::Token;
 
 /// 定义一个用于访问AST节点的一组方法。
 pub trait Visitor {

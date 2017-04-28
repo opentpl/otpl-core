@@ -3,7 +3,7 @@ mod visitor;
 
 pub use self::dom::*;
 pub use self::visitor::*;
-use core::token::Token;
+use token::Token;
 
 //https://www.oschina.net/question/81620_239264
 

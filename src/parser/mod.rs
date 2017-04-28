@@ -1,13 +1,13 @@
-use super::ast;
-use super::ast::{Node, NodeList};
-use super::token::{Token, TokenKind};
-use super::scanner::{Scanner};
-use super::token::ascii;
-
 mod breakpoint;
-
 pub use self::breakpoint::BreakPoint;
-use core::{Error, Result};
+
+use ast;
+use ast::{Node, NodeList};
+use token::{Token, TokenKind, ascii};
+use scanner::{Scanner};
+
+
+use {Error, Result};
 
 
 pub struct Parser<'a> {

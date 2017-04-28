@@ -1,4 +1,4 @@
-use core::token::Token;
+use token::Token;
 use super::NodeList;
 
 /// 表示一个 DOM 节点的标签，如： div。
