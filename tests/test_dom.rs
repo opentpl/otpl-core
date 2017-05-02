@@ -8,8 +8,6 @@ use libotpl::token::Token;
 use std::fs::OpenOptions;
 use std::path::{Path};
 use std::io::prelude::*;
-//    use core::scanner::SourceReader;
-//    use std::cell::{Ref, RefCell};
 
 
 struct TestVisitor<'a>(&'a Source);

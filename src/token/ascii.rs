@@ -68,8 +68,8 @@ pub const EOF: u8 = '\0' as u8;
 
 
 pub fn is_whitespace(c: u8) -> bool {
-    //return c == (' ' as u8) || c == ('\t' as u8) || c == ('\n' as u8) || c == ('\r' as u8) || c == (' ' as u8);
-    return c == SP || c == TB || c == CR || c == LF;
+    return c == (' ' as u8) || c == ('\t' as u8) || c == ('\n' as u8) || c == ('\r' as u8);
+    //return c == SP || c == TB || c == CR || c == LF;
 }
 
 pub fn is_lower_letter(c: u8) -> bool {
