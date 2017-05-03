@@ -8,7 +8,6 @@ pub mod scanner;
 pub mod parser;
 use std::result;
 use std::path::Path;
-pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
@@ -16,4 +15,13 @@ pub enum Error {
     EOF,
     Message(String),
     RefMessage(String, usize,usize,String),
+}
+
+pub type Result<T> = result::Result<T, Error>;
+
+pub type NoneResult = Result<()>;
+
+impl Error{
+    pub fn ok() ->NoneResult{ Ok(()) }
+    pub fn eof_none() ->NoneResult{ Err(Error::EOF) }
 }

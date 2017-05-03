@@ -1,13 +1,14 @@
 mod breakpoint;
+
 pub use self::breakpoint::BreakPoint;
 
 use ast;
 use ast::{Node, NodeList};
 use token::{Token, TokenKind, ascii};
 use scanner::{Scanner};
+use util::{VecSliceCompare};
 
-
-use {Error, Result};
+use {Error, Result, NoneResult};
 
 
 pub struct Parser<'a> {
@@ -34,7 +35,8 @@ impl<'a> Parser<'a> {
     fn skip_symbol(&mut self, symbol: Vec<u8>) -> Result<Token> {
         return self.take().and_then(|tok| -> Result<Token>{
             if &TokenKind::Symbol == tok.kind() {
-                return Ok(tok);
+                let val = self.scanner.source().content_vec(&tok);
+                if val.compare(symbol.as_ref()){ return Ok(tok); }
             }
             self.back(tok);
             return Err(Error::None);
@@ -88,17 +90,18 @@ impl<'a> Parser<'a> {
                 }
                 let mut node = ast::DomAttr::new(tok);
                 return self.skip_symbol(vec![ascii::EQS])
-                    .and_then(|tok| -> Result<Token> {
-                        self.set_breakpoint(Box::new(|owner: &mut Parser| -> Result<()> {
-                            if let Option::Some(tok) = owner.skip_type(TokenKind::DomAttrEnd) {
-                                owner.back(tok); // 保留以方便后面检查结束
-                                return Ok(());
+                    .and_then(|_| -> NoneResult {
+                        self.set_breakpoint(Box::new(|parser: &mut Parser| -> NoneResult {
+                            if let Option::Some(tok) = parser.skip_type(TokenKind::DomAttrEnd) {
+                                parser.back(tok); // 保留以方便后面检查结束
+                                return Error::ok();
                             }
                             return Err(Error::None);
                         }));
-                        self.parse_until(&mut node.value);
+                        let rst = self.parse_until(&mut node.value);
+                        println!("4=>>>>>>>>>>>>{:?}", node);
                         self.pop_breakpoint();
-                        return Ok(tok);
+                        return rst;
                     })
                     .and_then(|_| self.expect_type(TokenKind::DomAttrEnd))
                     .and_then(|_| Ok(node));
@@ -113,7 +116,7 @@ impl<'a> Parser<'a> {
         let mut tag = ast::DomTag::new(tok);
         loop {
             match self.parse_dom_attr() {
-                Ok(attr) => { tag.attrs.push(attr); }
+                Ok(attr) => { println!("0=>>>>>>>>>>>>{:?}", attr); tag.attrs.push(attr); }
                 Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
@@ -140,28 +143,28 @@ impl<'a> Parser<'a> {
     }
 
 
-    fn parse_until(&mut self, buf: &mut NodeList) -> Result<()> {
+    fn parse_until(&mut self, buf: &mut NodeList) -> NoneResult {
         loop {
             match self.check_breakpoint() {
                 Ok(_) | Err(Error::EOF) => { break; }
                 Err(Error::None) => {}
                 err => { return err; }
             }
-            match self.take().and_then(|tok| -> Result<()>{
+            match self.take().and_then(|tok| -> NoneResult{
                 match tok.kind() {
                     &TokenKind::DomTagStart => {
-                        return self.parse_dom_tag(tok).and_then(|node| -> Result<()>{
+                        return self.parse_dom_tag(tok).and_then(|node| -> NoneResult{
                             buf.push(Node::DomTag(node));
-                            return Ok(());
+                            return Error::ok();
                         });
                     }
                     &TokenKind::Data => {
                         buf.push(Node::Literal(tok));
-                        return Ok(());
+                        return Error::ok();
                     }
                     _ => {
                         debug!("TODO: no parsing token: {:?}", tok);
-                        return Ok(());
+                        return Error::ok();
                     }
                 }
             }) {
@@ -170,7 +173,7 @@ impl<'a> Parser<'a> {
                 err => { return err; }
             }
         }
-        return Ok(());
+        return Error::ok();
     }
 
     pub fn parse(&mut self) -> ast::Node {
