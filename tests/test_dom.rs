@@ -1,10 +1,10 @@
-extern crate libotpl;
+extern crate otpl;
 
-use libotpl::parser::Parser;
-use libotpl::scanner::{BytesScanner, Source};
-use libotpl::ast;
-use libotpl::ast::Visitor;
-use libotpl::token::Token;
+use otpl::parser::Parser;
+use otpl::scanner::{BytesScanner, Source};
+use otpl::ast;
+use otpl::ast::Visitor;
+use otpl::token::Token;
 use std::fs::OpenOptions;
 use std::path::{Path};
 use std::io::prelude::*;

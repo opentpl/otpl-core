@@ -1,4 +1,4 @@
-# libotpl
+# OTPL-Core
 [![Build Status](https://travis-ci.org/opentpl/libotpl.svg?branch=master)](https://travis-ci.org/opentpl/libotpl)
 
 The OTPL core library. provides parsing and compiling for the OTPL syntax.
