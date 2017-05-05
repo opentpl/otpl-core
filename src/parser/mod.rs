@@ -13,7 +13,7 @@ use {Error, Result, NoneResult};
 
 pub struct Parser<'a> {
     tokenizer: &'a mut Tokenizer,
-    break_checkers: Vec<Box<(FnMut(&mut Parser) -> Result<()>)>>,
+    break_checkers: Vec<Box<(FnMut(&mut Parser) -> NoneResult)>>,
 }
 
 impl<'a> Parser<'a> {
@@ -36,7 +36,7 @@ impl<'a> Parser<'a> {
         return self.take().and_then(|tok| -> Result<Token>{
             if &TokenKind::Symbol == tok.kind() {
                 let val = self.tokenizer.source().content_vec(&tok);
-                if val.compare(symbol.as_ref()){ return Ok(tok); }
+                if val.compare(symbol.as_ref()) { return Ok(tok); }
             }
             self.back(tok);
             return Err(Error::None);
@@ -53,15 +53,15 @@ impl<'a> Parser<'a> {
         return Option::None;
     }
 
-    fn set_breakpoint(&mut self, checker: Box<(FnMut(&mut Parser) -> Result<()>)>) {
+    fn set_breakpoint(&mut self, checker: Box<(FnMut(&mut Parser) -> NoneResult)>) {
         self.break_checkers.push(checker);
     }
 
-    fn pop_breakpoint(&mut self) -> Option<Box<(FnMut(&mut Parser) -> Result<()>)>> {
+    fn pop_breakpoint(&mut self) -> Option<Box<(FnMut(&mut Parser) -> NoneResult)>> {
         self.break_checkers.pop()
     }
 
-    fn check_breakpoint(&mut self) -> Result<()> {
+    fn check_breakpoint(&mut self) -> NoneResult {
         if self.break_checkers.is_empty() { return Err(Error::None); }
         let mut checker = self.break_checkers.pop().unwrap();
         let result = checker.as_mut()(self);
@@ -116,7 +116,10 @@ impl<'a> Parser<'a> {
         let mut tag = ast::DomTag::new(tok);
         loop {
             match self.parse_dom_attr() {
-                Ok(attr) => { println!("0=>>>>>>>>>>>>{:?}", attr); tag.attrs.push(attr); }
+                Ok(attr) => {
+                    println!("0=>>>>>>>>>>>>{:?}", attr);
+                    tag.attrs.push(attr);
+                }
                 Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
@@ -142,6 +145,24 @@ impl<'a> Parser<'a> {
         return Ok(tag);
     }
 
+    fn parse(&mut self) -> Result<ast::Node> {
+        return self.take().and_then(|tok| -> Result<ast::Node>{
+            match tok.kind() {
+                &TokenKind::DomTagStart => {
+                    return self.parse_dom_tag(tok).and_then(|node| -> Result<ast::Node>{
+                        return Ok(Node::DomTag(node));
+                    });
+                }
+                &TokenKind::Data => {
+                    return Ok(Node::Literal(tok));
+                }
+                _ => {
+                    println!("TODO: no parsing token: {:?}", tok);
+                    return Err(Error::None);
+                }
+            }
+        });
+    }
 
     fn parse_until(&mut self, buf: &mut NodeList) -> NoneResult {
         loop {
@@ -150,35 +171,30 @@ impl<'a> Parser<'a> {
                 Err(Error::None) => {}
                 err => { return err; }
             }
-            match self.take().and_then(|tok| -> NoneResult{
-                match tok.kind() {
-                    &TokenKind::DomTagStart => {
-                        return self.parse_dom_tag(tok).and_then(|node| -> NoneResult{
-                            buf.push(Node::DomTag(node));
-                            return Error::ok();
-                        });
-                    }
-                    &TokenKind::Data => {
-                        buf.push(Node::Literal(tok));
-                        return Error::ok();
-                    }
-                    _ => {
-                        debug!("TODO: no parsing token: {:?}", tok);
-                        return Error::ok();
-                    }
-                }
-            }) {
-                Ok(_) => {}
+
+            match self.parse() {
+                Ok(node) => { buf.push(node) }
                 Err(Error::None) | Err(Error::EOF) => { break; }
-                err => { return err; }
+                Err(err) => { return Err(err); }
             }
         }
         return Error::ok();
     }
 
-    pub fn parse(&mut self) -> ast::Node {
+    fn parse_all(&mut self, buf: &mut NodeList) -> NoneResult {
+        loop {
+            match self.parse() {
+                Ok(node) => { buf.push(node) }
+                Err(Error::None) | Err(Error::EOF) => { break; }
+                Err(err) => { return Err(err); }
+            }
+        }
+        return Error::ok();
+    }
+
+    pub fn parse_root(&mut self) -> ast::Node {
         let mut root = ast::Root::new();
-        self.parse_until(&mut root.body).expect("Failed to parse");
+        self.parse_all(&mut root.body).expect("Failed to parse");
         return Node::Root(root);
     }
 }

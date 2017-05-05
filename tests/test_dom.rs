@@ -47,7 +47,7 @@ fn test_dom() {
     let root: ast::Node;
     {
         let mut parser = Parser::new(&mut scanner);
-        root = parser.parse();
+        root = parser.parse_root();
         println!("Parse Done! ==============================");
     }
 

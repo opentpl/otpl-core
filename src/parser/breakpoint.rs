@@ -1,5 +1,5 @@
 use token::{Token, TokenKind};
-use {Error, Result};
+use {Error, Result, NoneResult};
 use util::VecSliceCompare;
 use super::Parser;
 
@@ -18,8 +18,8 @@ impl BreakPoint {
         BreakPoint { keep: keep, kind: kind, values: values }
     }
 
-    pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> Result<()>)> {
-        return Box::new(move |parser: &mut Parser| -> Result<()> {
+    pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> NoneResult)> {
+        return Box::new(move |parser: &mut Parser| -> NoneResult {
             let mut found;
             for point in &breaks {
                 if point.values.is_empty() {
@@ -28,14 +28,14 @@ impl BreakPoint {
                 found = true;
                 let mut buf: Vec<Token> = vec![];
                 for value in &point.values {
-                    match parser.take().and_then(|tok| -> Result<()>{
+                    match parser.take().and_then(|tok| -> NoneResult{
                         if (point.kind != TokenKind::Any && &point.kind != tok.kind())
                             || !value.compare(parser.tokenizer.source().content(&tok)) {
                             buf.push(tok);
                             return Err(Error::None);
                         }
                         buf.push(tok);
-                        return Ok(());
+                        return Error::ok();
                     }) {
                         Ok(_) => {}
                         Err(Error::None) => { found = false; }
@@ -51,7 +51,7 @@ impl BreakPoint {
                     }
                 }
 
-                if found { return Ok(()); }
+                if found { return Error::ok(); }
             }
             return Err(Error::None);
         });
