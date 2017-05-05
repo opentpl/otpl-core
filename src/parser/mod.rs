@@ -5,37 +5,37 @@ pub use self::breakpoint::BreakPoint;
 use ast;
 use ast::{Node, NodeList};
 use token::{Token, TokenKind, ascii};
-use scanner::{Scanner};
+use scanner::{Tokenizer};
 use util::{VecSliceCompare};
 
 use {Error, Result, NoneResult};
 
 
 pub struct Parser<'a> {
-    scanner: &'a mut Scanner,
+    tokenizer: &'a mut Tokenizer,
     break_checkers: Vec<Box<(FnMut(&mut Parser) -> Result<()>)>>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(scanner: &mut Scanner) -> Parser {
+    pub fn new(tokenizer: &mut Tokenizer) -> Parser {
         return Parser {
-            scanner: scanner,
+            tokenizer: tokenizer,
             break_checkers: vec![],
         };
     }
 
     fn take(&mut self) -> Result<Token> {
-        self.scanner.scan()
+        self.tokenizer.scan()
     }
     fn back(&mut self, tok: Token) {
-        self.scanner.back(tok);
+        self.tokenizer.back(tok);
     }
 
 
     fn skip_symbol(&mut self, symbol: Vec<u8>) -> Result<Token> {
         return self.take().and_then(|tok| -> Result<Token>{
             if &TokenKind::Symbol == tok.kind() {
-                let val = self.scanner.source().content_vec(&tok);
+                let val = self.tokenizer.source().content_vec(&tok);
                 if val.compare(symbol.as_ref()){ return Ok(tok); }
             }
             self.back(tok);
@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
                             return Err(Error::None);
                         }));
                         let rst = self.parse_until(&mut node.value);
-                        println!("4=>>>>>>>>>>>>{:?}", node);
+                        // println!("4=>>>>>>>>>>>>{:?}", node);
                         self.pop_breakpoint();
                         return rst;
                     })
@@ -125,17 +125,17 @@ impl<'a> Parser<'a> {
         match self.expect_type(TokenKind::DomTagEnd) {
             Ok(tok) => {
                 // 如果是独立标签 /
-                if self.scanner.source().content(&tok)[0] == ascii::SLA {
+                if self.tokenizer.source().content(&tok)[0] == ascii::SLA {
                     return Ok(tag);
                 }
             }
             Err(Error::None) => { return Err(Error::None); }
             Err(err) => { return Err(err); }
         }
-        let name = self.scanner.source().content_vec(&tag.name);
+        let name = self.tokenizer.source().content_vec(&tag.name);
         //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
-            BreakPoint::new(false, TokenKind::DomTagEnd, vec![vec![ascii::SLA], name]),
+            BreakPoint::new(false, TokenKind::DomCTag, vec![vec![ascii::SLA], name]),
         ]));
         self.parse_until(&mut tag.children);
         self.pop_breakpoint();

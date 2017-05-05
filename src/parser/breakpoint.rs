@@ -30,7 +30,7 @@ impl BreakPoint {
                 for value in &point.values {
                     match parser.take().and_then(|tok| -> Result<()>{
                         if (point.kind != TokenKind::Any && &point.kind != tok.kind())
-                            || !value.compare(parser.scanner.source().content(&tok)) {
+                            || !value.compare(parser.tokenizer.source().content(&tok)) {
                             buf.push(tok);
                             return Err(Error::None);
                         }

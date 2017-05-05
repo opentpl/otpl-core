@@ -1,4 +1,4 @@
-use super::{Scanner, Source};
+use super::{Tokenizer, Source};
 use std::path::Path;
 use token::{ascii, TokenKind, Token};
 use token::ascii::{is_digit, is_whitespace, is_upper_letter, is_lower_letter};
@@ -719,7 +719,7 @@ impl<'a> Source for BytesScanner<'a> {
 }
 
 
-impl<'a> Scanner for BytesScanner<'a> {
+impl<'a> Tokenizer for BytesScanner<'a> {
     fn back(&mut self, tok: Token) {
         self.tok_buf.push(tok);
     }

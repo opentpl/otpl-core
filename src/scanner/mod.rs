@@ -33,7 +33,7 @@ pub trait Source: Debug {
     }
 }
 
-pub trait Scanner: Debug {
+pub trait Tokenizer: Debug {
     fn back(&mut self, tok: Token);
     fn scan(&mut self) -> Result<Token>;
     fn source(&self) -> &Source;
