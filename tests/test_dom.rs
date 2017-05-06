@@ -22,7 +22,7 @@ impl<'a> Visitor for TestVisitor<'a> {
         }
         println!("children=> ");
         self.visit_list(&tag.children);
-        println!("<=tag {:?}", self.0.content_str(&tag.name));
+        //println!("<=ctag {:?}", self.0.content_str(&tag.name));
     }
     fn visit_literal(&mut self, tok: &Token) {
         println!("literal=> {:?}", self.0.content_str(tok));

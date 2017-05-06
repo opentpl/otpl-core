@@ -51,6 +51,7 @@ pub struct BytesScanner<'a> {
     /// token缓存
     tok_buf: Vec<Token>,
     in_stmt: bool,
+    markpos: Vec<isize>,
 }
 
 impl<'a> BytesScanner<'a> {
@@ -70,6 +71,7 @@ impl<'a> BytesScanner<'a> {
             lines: vec![],
             tok_buf: vec![],
             in_stmt: false,
+            markpos:vec![],
         };
     }
 
@@ -621,7 +623,7 @@ impl<'a> BytesScanner<'a> {
 
         if self.in_stmt {
             if let Some(tok) = self.find_delimiter(TokenKind::RDelimiter) {
-                self.in_stmt=false;
+                self.in_stmt = false;
                 return Ok(tok);
             }
             return self.scan_stmt();
@@ -730,6 +732,24 @@ impl<'a> Tokenizer for BytesScanner<'a> {
 
     fn source(&self) -> &Source {
         self
+    }
+
+    fn mark(&mut self) {
+        let mut pos = self.offset as isize;
+        if !self.tok_buf.is_empty() {
+            pos = self.tok_buf[self.tok_buf.len() - 1].1 as isize;
+            //TODO: 如果token 的 start-pos 非标准（如 ctag）,这可能还原后不能重现原token
+        }
+        self.markpos.offer(pos);
+    }
+
+    fn reset(&mut self) {
+        if !self.markpos.is_empty() {
+            let pos =(self.offset as isize) -self.markpos.take().unwrap();
+            println!("mmmmmmmmm {}", pos);
+            self.seek(-pos);
+            self.tok_buf.clear();
+        }
     }
 }
 

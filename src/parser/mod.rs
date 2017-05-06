@@ -136,11 +136,18 @@ impl<'a> Parser<'a> {
             Err(err) => { return Err(err); }
         }
         let name = self.tokenizer.source().content_vec(&tag.name);
+        //println!("bbbbbbbbbb{:?}", value[0] as char);
         //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
-            BreakPoint::new(false, TokenKind::DomCTag, vec![vec![ascii::SLA], name]),
+            BreakPoint::new(false, TokenKind::DomCTag, vec![name]),
         ]));
-        self.parse_until(&mut tag.children);
+
+        match self.parse_until(&mut tag.children) {
+            Ok(_) | Err(Error::None) => {
+                println!("vvvvvvvvvvvvvvv");
+            }
+            Err(err) => { return Err(err); }
+        }
         self.pop_breakpoint();
         return Ok(tag);
     }
@@ -165,10 +172,13 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_until(&mut self, buf: &mut NodeList) -> NoneResult {
+        // TODO: 设置还原点
+        self.tokenizer.mark();
         loop {
             match self.check_breakpoint() {
-                Ok(_) | Err(Error::EOF) => { break; }
-                Err(Error::None) => {}
+                Ok(_) => {println!("zzzzzzzzzzzzz");return Error::ok();}
+                Err(Error::EOF) => {break;}
+                Err(Error::None) => { }
                 err => { return err; }
             }
 
@@ -178,7 +188,11 @@ impl<'a> Parser<'a> {
                 Err(err) => { return Err(err); }
             }
         }
-        return Error::ok();
+        // TODO: 还原点
+        self.tokenizer.reset();
+        buf.clear();
+        println!("fffffffffffff");
+        return Err(Error::None);
     }
 
     fn parse_all(&mut self, buf: &mut NodeList) -> NoneResult {
