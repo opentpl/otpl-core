@@ -22,9 +22,9 @@ pub enum TokenKind {
 }
 
 /// 定义的源码中最小词法的含义。
-/// Token( [`Source`] , `TokenKind`, start offset, end offset)
+/// Token([`TokenKind`], start-offset, end-offset, pos)
 #[derive(Debug)]
-pub struct Token(pub TokenKind, pub usize, pub usize);
+pub struct Token(pub TokenKind, pub usize, pub usize, pub usize);
 
 impl Token {
     pub fn kind(&self) -> &TokenKind {
