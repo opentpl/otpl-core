@@ -1,5 +1,5 @@
 # OTPL-Core
-[![Build Status](https://travis-ci.org/opentpl/libotpl.svg?branch=master)](https://travis-ci.org/opentpl/libotpl)
+[![Build Status](https://travis-ci.org/opentpl/otpl-core.svg?branch=master)](https://travis-ci.org/opentpl/otpl-core)
 
 The OTPL core library. provides parsing and compiling for the OTPL syntax.
 OTPL 核心库，提供用于解析和编译OTPL语法。
