@@ -524,8 +524,8 @@ impl<'a> BytesScanner<'a> {
                     return Err(self.err(format!("语法错误, 代码块未结束, near character {},", ch as char), pos));
                 }
 
-                let s = unsafe { from_utf8_unchecked(&self.source[start - 2..end + 2]) };
-                println!("1=>>>>>>>>>> {}  {}, {:?}", start, end, s);
+                //let s = unsafe { from_utf8_unchecked(&self.source[start - 2..end + 2]) };
+                //println!("1=>>>>>>>>>> {}  {}, {:?}", start, end, s);
                 let start = start - 2;
                 let mut inner = BytesScanner::new(&self.source[start..end + 2], "inner".as_ref());
                 let origin = start;
@@ -560,12 +560,12 @@ impl<'a> BytesScanner<'a> {
                     let origin = s.len() + start - 2;
                     s += unsafe { from_utf8_unchecked(&self.source[start..end]) };
                     s += "}}";
-                    println!("2=>>>>>>>>>> {}  {}, {:?}", start, end, s);
+                    //println!("2=>>>>>>>>>> {}  {}, {:?}", start, end, s);
                     let mut inner = BytesScanner::new(s.as_bytes(), "inner-ext".as_ref());
                     loop {
                         match inner.scan_next() {
                             Ok(mut tok) => {
-                                println!("3=>>>>>>>>>> {:?}", tok);
+                                //println!("3=>>>>>>>>>> {:?}", tok);
                                 // 映射 pos
                                 tok.1 += origin;
                                 tok.2 += origin;
@@ -746,7 +746,7 @@ impl<'a> Tokenizer for BytesScanner<'a> {
     fn reset(&mut self) {
         if !self.markpos.is_empty() {
             let pos =(self.offset as isize) -self.markpos.take().unwrap();
-            println!("mmmmmmmmm {}", pos);
+            //println!("mmmmmmmmm {}", pos);
             self.seek(-pos);
             self.tok_buf.clear();
         }

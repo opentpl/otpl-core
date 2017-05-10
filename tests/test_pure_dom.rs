@@ -18,12 +18,12 @@ impl<'a> Visitor for TestVisitor<'a> {
         for attr in &tag.attrs {
             println!("attr=> {:?}", self.0.content_str(&attr.name));
             println!("value=> ");
-            self.visit_list(&attr.value)
+            self.visit_list(&attr.value);
         }
         println!("children=> ");
         self.visit_list(&tag.children);
-        //println!("<=ctag {:?}", self.0.content_str(&tag.name));
     }
+
     fn visit_literal(&mut self, tok: &Token) {
         println!("literal=> {:?}", self.0.content_str(tok));
     }
@@ -33,14 +33,14 @@ fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
     return OpenOptions::new().read(true).open(path)
         .and_then(|mut f| -> std::io::Result<Vec<u8>>{
             let mut buf = Vec::new();
-            f.read_to_end(&mut buf);
+            f.read_to_end(&mut buf).unwrap();
             return Ok(buf);
         }).expect("打开文件失败");
 }
 
 #[test]
 fn test_dom() {
-    let buf = read_file("./src/scanner/test.html");
+    let buf = read_file("./tests/pure_dom.html");
     //
 
     let mut scanner = BytesScanner::new(&buf, "source".as_ref());

@@ -1,7 +1,7 @@
 mod bytes_scanner;
 
 pub use self::bytes_scanner::BytesScanner;
-use {Error, Result};
+use {Result};
 use token::Token;
 use std::fmt::Debug;
 use std::path::Path;

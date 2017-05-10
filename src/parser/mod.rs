@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.parse_dom_attr() {
                 Ok(attr) => {
-                    println!("0=>>>>>>>>>>>>{:?}", attr);
+                    //println!("0=>>>>>>>>>>>>{:?}", attr);
                     tag.attrs.push(attr);
                 }
                 Err(Error::None) => { break; }
@@ -144,11 +144,18 @@ impl<'a> Parser<'a> {
 
         match self.parse_until(&mut tag.children) {
             Ok(_) | Err(Error::None) => {
-                println!("vvvvvvvvvvvvvvv");
+                //println!("vvvvvvvvvvvvvvv");
             }
             Err(err) => { return Err(err); }
         }
         self.pop_breakpoint();
+
+        if tag.children.len() > 0 {
+            //移除所匹配到的ctag
+            let index = tag.children.len() - 1;
+            tag.children.remove(index);
+        }
+
         return Ok(tag);
     }
 
@@ -176,9 +183,10 @@ impl<'a> Parser<'a> {
         self.tokenizer.mark();
         loop {
             match self.check_breakpoint() {
-                Ok(_) => {println!("zzzzzzzzzzzzz");return Error::ok();}
-                Err(Error::EOF) => {break;}
-                Err(Error::None) => { }
+                //println!("zzzzzzzzzzzzz");
+                Ok(_) => { return Error::ok(); }
+                Err(Error::EOF) => { break; }
+                Err(Error::None) => {}
                 err => { return err; }
             }
 
@@ -191,7 +199,7 @@ impl<'a> Parser<'a> {
         // TODO: 还原点
         self.tokenizer.reset();
         buf.clear();
-        println!("fffffffffffff");
+        //println!("fffffffffffff");
         return Err(Error::None);
     }
 

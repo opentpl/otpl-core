@@ -7,7 +7,6 @@ pub mod token;
 pub mod scanner;
 pub mod parser;
 use std::result;
-use std::path::Path;
 
 #[derive(Debug)]
 pub enum Error {
