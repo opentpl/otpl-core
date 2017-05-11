@@ -1,14 +1,5 @@
-extern crate otpl;
-
-use otpl::parser::Parser;
-use otpl::scanner::{BytesScanner, Source};
-use otpl::ast;
-use otpl::ast::Visitor;
-use otpl::token::Token;
-use std::fs::OpenOptions;
-use std::path::{Path};
-use std::io::prelude::*;
-
+mod prelude;
+use self::prelude::*;
 
 struct TestVisitor<'a>(&'a Source);
 
@@ -29,19 +20,20 @@ impl<'a> Visitor for TestVisitor<'a> {
     }
 }
 
-fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
-    return OpenOptions::new().read(true).open(path)
-        .and_then(|mut f| -> std::io::Result<Vec<u8>>{
-            let mut buf = Vec::new();
-            f.read_to_end(&mut buf).unwrap();
-            return Ok(buf);
-        }).expect("打开文件失败");
-}
+//fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
+//    return OpenOptions::new().read(true).open(path)
+//        .and_then(|mut f| -> std::io::Result<Vec<u8>>{
+//            let mut buf = Vec::new();
+//            f.read_to_end(&mut buf).unwrap();
+//            return Ok(buf);
+//        }).expect("打开文件失败");
+//}
 
 
 #[test]
-fn test_dom() {
-    let buf = read_file("./tests/dev.html");
+#[ignore]
+fn test_pure_dom() {
+    let buf = read_file("./tests/pure_dom.html");
     //
 
     let mut scanner = BytesScanner::new(&buf, "source".as_ref());

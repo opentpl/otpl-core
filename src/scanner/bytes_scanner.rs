@@ -621,6 +621,7 @@ impl<'a> BytesScanner<'a> {
             return Ok(self.tok_buf.pop().unwrap());
         }
         if self.ch == ascii::EOF {
+            println!("EOF");
             return Err(Error::EOF);
         }
 
@@ -731,24 +732,28 @@ impl<'a> Tokenizer for BytesScanner<'a> {
             //self.mark_buf[i].remove_item(&tok);
             match self.mark_buf[i].iter().position(|x| *x == tok) {
                 Some(x) => {
-                    println!("{:?}", x);
+                    println!("remove_item:{:?}  {}", x,len);
                     self.mark_buf[i].remove(x);
                 }
                 None => {}
             };
         }
+        println!("back:{:?}  {}", tok,len);
         self.tok_buf.push(tok);
     }
 
     fn scan(&mut self) -> Result<Token> {
+        println!("scan 0===>{:?}",self.tok_buf);
         let rst = self.scan_next();
         let len = self.mark_buf.len();
         if len == 0 {
+            println!("scan 1===>{:?}",rst);
             return rst;
         }
         return rst.and_then(|tok| -> Result<Token>{
             for i in 0..len {
                 self.mark_buf[i].push(tok.clone());
+                println!("scan===>{:?}",self.mark_buf[i]);
             }
             return Ok(tok);
         });
@@ -765,6 +770,7 @@ impl<'a> Tokenizer for BytesScanner<'a> {
     fn reset(&mut self) {
         if !self.mark_buf.is_empty() {
             let buf = self.mark_buf.pop().unwrap();
+            println!("reset===>{:?}",buf);
             for tok in buf {
                 Tokenizer::back(self, tok);
             }
@@ -772,7 +778,8 @@ impl<'a> Tokenizer for BytesScanner<'a> {
     }
     fn unmark(&mut self) {
         if !self.mark_buf.is_empty() {
-            self.mark_buf.pop().unwrap();
+            let buf=self.mark_buf.pop().unwrap();
+            println!("unmark===>{:?}",buf);
         }
     }
 }

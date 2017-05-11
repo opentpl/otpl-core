@@ -132,29 +132,35 @@ impl<'a> Parser<'a> {
                     return Ok(tag);
                 }
             }
-            Err(Error::None) => { return Err(Error::None); }
+            Err(Error::None) => { return Err(Error::None); } //TODO:重新定义错误：标签未结束
             Err(err) => { return Err(err); }
         }
         let name = self.tokenizer.source().content_vec(&tag.name);
-        //println!("bbbbbbbbbb{:?}", value[0] as char);
+        println!("bbbbbbbbbb:{:?}", String::from_utf8(name.clone()).unwrap());
         //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
             BreakPoint::new(false, TokenKind::DomCTag, vec![name]),
         ]));
 
         match self.parse_until(&mut tag.children) {
-            Ok(_) | Err(Error::None) => {
-                //println!("vvvvvvvvvvvvvvv");
+            Ok(_) => {
+                println!("vvvvvvvvvvvvvvv");
+            }
+            Err(Error::None) => {
+                let tok=self.take().unwrap();
+                println!("xxxxxxxxxxx:{:?}",self.tokenizer.source().content_str(&tok));
+
+
             }
             Err(err) => { return Err(err); }
         }
         self.pop_breakpoint();
 
-        if tag.children.len() > 0 {
-            //移除所匹配到的ctag
-            let index = tag.children.len() - 1;
-            tag.children.remove(index);
-        }
+//        if tag.children.len() > 0 {
+//            //移除所匹配到的ctag
+//            let index = tag.children.len() - 1;
+//            tag.children.remove(index);
+//        }
 
         return Ok(tag);
     }
@@ -172,7 +178,7 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     println!("TODO: no parsing token: {:?}", tok);
-                    return Err(Error::None);
+                    return Ok(Node::Empty);
                 }
             }
         });
@@ -202,7 +208,7 @@ impl<'a> Parser<'a> {
         // TODO: 还原点
         self.tokenizer.reset();
         buf.clear();
-        //println!("fffffffffffff");
+        println!("fffffffffffff");
         return Err(Error::None);
     }
 

@@ -1,6 +1,6 @@
 use token::{Token, TokenKind};
 use {Error, NoneResult};
-use util::VecSliceCompare;
+use util::{VecSliceCompare,Stack};
 use super::Parser;
 
 /// 定义用于解析过程中的断点。
@@ -21,12 +21,13 @@ impl BreakPoint {
     pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> NoneResult)> {
         return Box::new(move |parser: &mut Parser| -> NoneResult {
             let mut found;
+            let mut buf: Vec<Token> = vec![];
             for point in &breaks {
                 if point.values.is_empty() {
                     continue;
                 }
                 found = true;
-                let mut buf: Vec<Token> = vec![];
+
                 for value in &point.values {
                     match parser.take().and_then(|tok| -> NoneResult{
                         //println!("bbbbbbbbbb{:?}", parser.tokenizer.source().content(&tok)[0] as char);
@@ -54,12 +55,13 @@ impl BreakPoint {
 
                 if !found || point.keep {
                     while !buf.is_empty() {
-                        parser.back(buf.pop().unwrap());
+                        parser.back(buf.take().unwrap());
                     }
                 }
 
                 if found { return Error::ok(); }
             }
+
             return Err(Error::None);
         });
     }
