@@ -40,9 +40,8 @@ fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
 
 
 #[test]
-#[ignore]
 fn test_dom() {
-    let buf = read_file("./tests/pure_dom.html");
+    let buf = read_file("./tests/dev.html");
     //
 
     let mut scanner = BytesScanner::new(&buf, "source".as_ref());

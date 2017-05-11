@@ -2,7 +2,7 @@ use super::{Tokenizer, Source};
 use std::path::Path;
 use token::{ascii, TokenKind, Token};
 use token::ascii::{is_digit, is_whitespace, is_upper_letter, is_lower_letter};
-use util::{BinarySearch, Queue};
+use util::{BinarySearch, Stack};
 use {Error, Result};
 use std::str::from_utf8_unchecked;
 
@@ -51,7 +51,7 @@ pub struct BytesScanner<'a> {
     /// token缓存
     tok_buf: Vec<Token>,
     in_stmt: bool,
-    markpos: Vec<isize>,
+    mark_buf: Vec<Vec<Token>>,
 }
 
 impl<'a> BytesScanner<'a> {
@@ -71,7 +71,7 @@ impl<'a> BytesScanner<'a> {
             lines: vec![],
             tok_buf: vec![],
             in_stmt: false,
-            markpos: vec![],
+            mark_buf: vec![],
         };
     }
 
@@ -618,7 +618,7 @@ impl<'a> BytesScanner<'a> {
     /// 扫描下一个
     fn scan_next(&mut self) -> Result<Token> {
         if !self.tok_buf.is_empty() {
-            return Ok(self.tok_buf.take().unwrap());
+            return Ok(self.tok_buf.pop().unwrap());
         }
         if self.ch == ascii::EOF {
             return Err(Error::EOF);
@@ -726,11 +726,32 @@ impl<'a> Source for BytesScanner<'a> {
 
 impl<'a> Tokenizer for BytesScanner<'a> {
     fn back(&mut self, tok: Token) {
+        let len = self.mark_buf.len();
+        for i in 0..len {
+            //self.mark_buf[i].remove_item(&tok);
+            match self.mark_buf[i].iter().position(|x| *x == tok) {
+                Some(x) => {
+                    println!("{:?}", x);
+                    self.mark_buf[i].remove(x);
+                }
+                None => {}
+            };
+        }
         self.tok_buf.push(tok);
     }
 
     fn scan(&mut self) -> Result<Token> {
-        self.scan_next()
+        let rst = self.scan_next();
+        let len = self.mark_buf.len();
+        if len == 0 {
+            return rst;
+        }
+        return rst.and_then(|tok| -> Result<Token>{
+            for i in 0..len {
+                self.mark_buf[i].push(tok.clone());
+            }
+            return Ok(tok);
+        });
     }
 
     fn source(&self) -> &Source {
@@ -738,24 +759,66 @@ impl<'a> Tokenizer for BytesScanner<'a> {
     }
 
     fn mark(&mut self) {
-        let mut pos = self.offset as isize;
-        if !self.tok_buf.is_empty() {
-            pos = self.tok_buf[self.tok_buf.len() - 1].3 as isize;
-            //TODO: 如果token 的 start-pos 非标准（如 ctag）,这可能还原后不能重现原token
-        }
-        self.markpos.offer(pos);
+        self.mark_buf.push(vec![]);
     }
 
     fn reset(&mut self) {
-        if !self.markpos.is_empty() {
-            let pos = (self.offset as isize) - self.markpos.take().unwrap();
-            //println!("mmmmmmmmm {}", pos);
-            self.seek(-pos);
-            self.tok_buf.clear();
+        if !self.mark_buf.is_empty() {
+            let buf = self.mark_buf.pop().unwrap();
+            for tok in buf {
+                Tokenizer::back(self, tok);
+            }
+        }
+    }
+    fn unmark(&mut self) {
+        if !self.mark_buf.is_empty() {
+            self.mark_buf.pop().unwrap();
         }
     }
 }
+/*
+trait MarkSupport{
+    fn mark(&mut self);
+    fn take(&mut self)-> Result<Token>;
+    fn back(&mut self, tok: Token);
+    fn reset(&mut self);
+    fn clear(&mut self);
+}
 
+struct Marker<'a>{
+    inner:&'a MarkSupport,
+    buf: Vec<Token>,
+}
+
+impl<'a> MarkSupport for Marker<'a>{
+    fn mark(&mut self) {
+        Marker{
+          inner=self;
+        };
+        self.inner=
+    }
+
+    fn take(&mut self) -> Result<Token> {
+        return self.inner.take().and_then(|tok|->Result<Token> {
+           self.buf.push(tok.clone());
+            return Ok(tok);
+        });
+    }
+
+    fn back(&mut self, tok: Token) {
+        let tok=self.buf.remove_item(&tok).unwrap();
+        self.inner.back(tok);
+    }
+
+    fn reset(&mut self) {
+        unimplemented!()
+    }
+
+    fn clear(&mut self) {
+        unimplemented!()
+    }
+
+}*/
 
 
 

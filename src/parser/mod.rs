@@ -184,7 +184,10 @@ impl<'a> Parser<'a> {
         loop {
             match self.check_breakpoint() {
                 //println!("zzzzzzzzzzzzz");
-                Ok(_) => { return Error::ok(); }
+                Ok(_) => {
+                    self.tokenizer.unmark();
+                    return Error::ok();
+                }
                 Err(Error::EOF) => { break; }
                 Err(Error::None) => {}
                 err => { return err; }

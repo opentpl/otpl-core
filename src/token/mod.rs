@@ -23,7 +23,7 @@ pub enum TokenKind {
 
 /// 定义的源码中最小词法的含义。
 /// Token([`TokenKind`], start-offset, end-offset, pos)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token(pub TokenKind, pub usize, pub usize, pub usize);
 
 impl Token {
@@ -32,3 +32,8 @@ impl Token {
     }
 }
 
+impl PartialEq<Token> for Token {
+    fn eq(&self, other: &Token) -> bool {
+        self.0 == other.0 && self.1 == other.1 && self.2 == other.2
+    }
+}
