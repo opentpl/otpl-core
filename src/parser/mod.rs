@@ -136,7 +136,7 @@ impl<'a> Parser<'a> {
             Err(err) => { return Err(err); }
         }
         let name = self.tokenizer.source().content_vec(&tag.name);
-        println!("bbbbbbbbbb:{:?}", String::from_utf8(name.clone()).unwrap());
+        //println!("bbbbbbbbbb:{:?}", String::from_utf8(name.clone()).unwrap());
         //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
             BreakPoint::new(false, TokenKind::DomCTag, vec![name]),
@@ -144,13 +144,13 @@ impl<'a> Parser<'a> {
 
         match self.parse_until(&mut tag.children) {
             Ok(_) => {
-                println!("vvvvvvvvvvvvvvv");
+                //println!("vvvvvvvvvvvvvvv");
             }
             Err(Error::None) => {
-                let tok=self.take().unwrap();
-                println!("xxxxxxxxxxx:{:?}",self.tokenizer.source().content_str(&tok));
+//                let tok=self.take().unwrap();
+//                println!("xxxxxxxxxxx:{:?}",self.tokenizer.source().content_str(&tok));
 
-
+                //println!("xxxxxxxxxxxxxxx");
             }
             Err(err) => { return Err(err); }
         }
@@ -208,7 +208,7 @@ impl<'a> Parser<'a> {
         // TODO: 还原点
         self.tokenizer.reset();
         buf.clear();
-        println!("fffffffffffff");
+        //println!("fffffffffffff");
         return Err(Error::None);
     }
 

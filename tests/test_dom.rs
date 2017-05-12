@@ -31,7 +31,7 @@ impl<'a> Visitor for TestVisitor<'a> {
 
 
 #[test]
-#[ignore]
+//#[ignore]
 fn test_pure_dom() {
     let buf = read_file("./tests/pure_dom.html");
     //
