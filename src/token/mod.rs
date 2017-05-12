@@ -5,6 +5,8 @@ pub mod ascii;
 pub enum TokenKind {
     /// 模板结束标志
     EOF,
+    /// 用于辅助处理，标示忽略
+    Ignore,
     ///TODO: 考虑用 Literal 代替？
     Data,
     /// 符号

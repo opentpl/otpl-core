@@ -33,7 +33,7 @@ impl BreakPoint {
                         //println!("bbbbbbbbbb{:?}", parser.tokenizer.source().content(&tok)[0] as char);
                         if &point.kind == tok.kind() && value.compare(parser.tokenizer.source().content(&tok)) {
                             //println!("bbbbbbbbbb{:?}", 2);
-                        } else if point.kind == TokenKind::Any && value.compare(parser.tokenizer.source().content(&tok)) {
+                        } else if point.kind == TokenKind::Ignore && value.compare(parser.tokenizer.source().content(&tok)) {
                             //println!("bbbbbbbbbb{:?}", 2);
                         } else {
                             buf.push(tok);

@@ -32,11 +32,13 @@ impl<'a> Parser<'a> {
     }
 
 
-    fn skip_symbol(&mut self, symbol: Vec<u8>) -> Result<Token> {
+    fn skip_symbol(&mut self, symbols: Vec<Vec<u8>>) -> Result<Token> {
         return self.take().and_then(|tok| -> Result<Token>{
             if &TokenKind::Symbol == tok.kind() {
-                let val = self.tokenizer.source().content_vec(&tok);
-                if val.compare(symbol.as_ref()) { return Ok(tok); }
+                let val = self.tokenizer.source().content(&tok);
+                for symbol in &symbols {
+                    if symbol.compare(val) { return Ok(tok); }
+                }
             }
             self.back(tok);
             return Err(Error::None);
@@ -81,6 +83,17 @@ impl<'a> Parser<'a> {
         // return Err(Error::Message(format!("expected type {:?}, but EOF.", kind)));
     }
 
+    fn expect_value(&mut self, value: Vec<u8>) -> NoneResult {
+        return self.take().and_then(|tok| -> NoneResult{
+            let content = self.tokenizer.source().content(&tok);
+            if value.compare(content) {
+                return Error::ok();
+            }
+            return Err(Error::Message(format!("expected value {:?}, found {:?}. {:?}", value, content, tok)));
+        });
+    }
+
+
     fn parse_dom_attr(&mut self) -> Result<ast::DomAttr> {
         match self.take() {
             Ok(tok) => {
@@ -89,7 +102,7 @@ impl<'a> Parser<'a> {
                     return Err(Error::None);
                 }
                 let mut node = ast::DomAttr::new(tok);
-                return self.skip_symbol(vec![ascii::EQS])
+                return self.skip_symbol(vec![vec![ascii::EQS]])
                     .and_then(|_| -> NoneResult {
                         self.set_breakpoint(Box::new(|parser: &mut Parser| -> NoneResult {
                             if let Option::Some(tok) = parser.skip_type(TokenKind::DomAttrEnd) {
@@ -147,8 +160,8 @@ impl<'a> Parser<'a> {
                 //println!("vvvvvvvvvvvvvvv");
             }
             Err(Error::None) => {
-//                let tok=self.take().unwrap();
-//                println!("xxxxxxxxxxx:{:?}",self.tokenizer.source().content_str(&tok));
+                //                let tok=self.take().unwrap();
+                //                println!("xxxxxxxxxxx:{:?}",self.tokenizer.source().content_str(&tok));
 
                 //println!("xxxxxxxxxxxxxxx");
             }
@@ -156,13 +169,92 @@ impl<'a> Parser<'a> {
         }
         self.pop_breakpoint();
 
-//        if tag.children.len() > 0 {
-//            //移除所匹配到的ctag
-//            let index = tag.children.len() - 1;
-//            tag.children.remove(index);
-//        }
+        //        if tag.children.len() > 0 {
+        //            //移除所匹配到的ctag
+        //            let index = tag.children.len() - 1;
+        //            tag.children.remove(index);
+        //        }
 
         return Ok(tag);
+    }
+
+    fn parse_primary(&mut self) -> Result<ast::Node> {
+        Ok(Node::Empty)
+    }
+
+    fn parse_member_access(&mut self) -> Result<ast::Node> {
+        Ok(Node::Empty)
+    }
+
+    fn parse_unary(&mut self) -> Result<ast::Node> {
+        Ok(Node::Empty)
+    }
+
+    fn parse_binary_mdm(&mut self) -> Result<ast::Node> {
+        Ok(Node::Empty)
+    }
+
+    fn parse_binary_as(&mut self) -> Result<ast::Node> {
+        Ok(Node::Empty)
+    }
+
+    fn parse_compare(&mut self) -> Result<ast::Node> {
+        Ok(Node::Empty)
+    }
+
+    fn parse_logic(&mut self) -> Result<ast::Node> {
+        Ok(Node::Empty)
+    }
+    /// 解析三目运算
+    fn parse_ternary(&mut self) -> Result<ast::Node> {
+        let node = self.parse_logic();
+        if node.is_err() { return node; }
+        let mut node = node.unwrap();
+        loop {
+            match self.skip_symbol(vec![vec!['?' as u8]]) {
+                Ok(_) => {
+                    let left = self.parse_expression();
+                    if left.is_err() { return left; }
+                    match self.expect_value(vec![':' as u8]) {
+                        Ok(_) => {}
+                        Err(err) => { return Err(err); }
+                    }
+                    let right = self.parse_expression();
+                    if right.is_err() { return right; }
+                    node = Node::Ternary(Box::new(node), Box::new(left.unwrap()), Box::new(right.unwrap()));
+                }
+                Err(err) => { return Err(err); }
+            }
+        }
+        return Ok(node);
+    }
+    /// 解析一个表达式
+    fn parse_expression(&mut self) -> Result<ast::Node> {
+        self.parse_ternary()
+    }
+    /// 解析代码段
+    fn parse_statement(&mut self) -> Result<ast::Node> {
+        let mut list = vec![];
+        loop {
+            match self.take().and_then(|tok| -> Result<ast::Node>{
+                return match tok.kind() {
+                    &TokenKind::RDelimiter => { return Err(Error::None); }
+                    &TokenKind::Identifier => {
+                        return self.parse_expression();
+                    }
+                    _ => {
+                        return Err(Error::Message(format!("unexpected token {:?}", tok)));
+                    }
+                };
+            }) {
+                Ok(node) => {
+                    list.push(node);
+                }
+                Err(Error::None) => { return Ok(Node::Statement(list)); }
+                err => { return err; }
+            }
+        }
+        //        return Ok(Node::Statement(list));
     }
 
     fn parse(&mut self) -> Result<ast::Node> {
@@ -172,6 +264,9 @@ impl<'a> Parser<'a> {
                     return self.parse_dom_tag(tok).and_then(|node| -> Result<ast::Node>{
                         return Ok(Node::DomTag(node));
                     });
+                }
+                &TokenKind::LDelimiter => {
+                    return self.parse_statement();
                 }
                 &TokenKind::Data => {
                     return Ok(Node::Literal(tok));

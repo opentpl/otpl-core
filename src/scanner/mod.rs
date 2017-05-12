@@ -37,9 +37,10 @@ pub trait Tokenizer: Debug {
     fn back(&mut self, tok: Token);
     fn scan(&mut self) -> Result<Token>;
     fn source(&self) -> &Source;
-    // 标记一个还原点
+    /// 标记一个还原点
     fn mark(&mut self);
+    /// 取消一个还原点
     fn unmark(&mut self);
-    // 重新设置到还原点
+    /// 重新设置最新的还原点
     fn reset(&mut self);
 }

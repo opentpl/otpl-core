@@ -20,6 +20,9 @@ pub enum Node {
     Root(Root),
     /// 表是一个 DOM 节点，如：div。
     DomTag(DomTag),
+    /// 代码段
+    Statement(NodeList),
+    Ternary(Box<Node>,Box<Node>,Box<Node>),
 }
 
 #[derive(Debug)]
@@ -34,3 +37,6 @@ impl Root {
         };
     }
 }
+
+#[derive(Debug)]
+pub struct TernaryNode(pub Node,pub Node,pub Node);

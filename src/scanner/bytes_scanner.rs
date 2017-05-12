@@ -330,7 +330,7 @@ impl<'a> BytesScanner<'a> {
                 while self.forward() {
                     let ch = self.ch;
                     if self.find_sp() {
-                        return Ok(Token(TokenKind::Ident, pos, self.offset));
+                        return Ok(Token(TokenKind::Identifier, pos, self.offset));
                     } else if is_digit(ch) || is_lower_letter(ch) || is_upper_letter(ch) || ch == ascii::UND { continue; }
                     return Err(self.err(format!("unexpected  character {:?}.", ch as char), pos));
                 }
