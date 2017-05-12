@@ -3,21 +3,35 @@ pub mod ascii;
 /// 标记的种类
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TokenKind {
+    /// 模板结束标志
     EOF,
-    Any,
+    ///TODO: 考虑用 Literal 代替？
     Data,
+    /// 符号
     Symbol,
+    /// 字符串
     String,
+    /// 整数
     Int,
-    Ident,
+    /// 标识符
+    Identifier,
+    /// DOM标签的开始
     DomTagStart,
+    /// DOM标签的结束
     DomTagEnd,
+    /// DOM标签属性的开始
     DomAttrStart,
+    /// DOM标签属性的结束
     DomAttrEnd,
+    /// DOM标签的闭合部分，如：</div>
     DomCTag,
+    /// DOM注释
     DomComment,
+    /// TPL代码开始边界符
     LDelimiter,
+    /// TPL代码结束边界符
     RDelimiter,
+    /// 字面量
     Literal,
 }
 

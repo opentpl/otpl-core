@@ -775,9 +775,6 @@ impl<'a> Tokenizer for BytesScanner<'a> {
             while !buf.is_empty() {
                 Tokenizer::back(self, buf.pop().unwrap());
             }
-            //            for tok in buf {
-            //                Tokenizer::back(self, tok);
-            //            }
         }
     }
     fn unmark(&mut self) {
