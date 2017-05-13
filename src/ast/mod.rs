@@ -22,7 +22,24 @@ pub enum Node {
     DomTag(DomTag),
     /// 代码段
     Statement(NodeList),
+    /// 三目表达式（express,left,right）
     Ternary(Box<Node>,Box<Node>,Box<Node>),
+    /// 二元表达式（left,right,operator）
+    Binary(Box<Node>,Box<Node>,Token),
+    /// 一元表达式（body,operator）
+    Unary(Box<Node>,Token),
+    /// 成员属性（object, parameters, operator）
+    Property(Box<Node>,NodeList,Token),
+    /// 成员方法（object, parameters, operator）
+    Method(Box<Node>,NodeList,Token),
+    String(Token),
+    Boolean(Token),
+    Integer(Token),
+    Float(Token,Token),
+    None(Token),
+    Identifier(Token),
+    List(NodeList),
+
 }
 
 #[derive(Debug)]

@@ -18,6 +18,9 @@ impl<'a> Visitor for TestVisitor<'a> {
     fn visit_literal(&mut self, tok: &Token) {
         println!("literal=> {:?}", self.0.content_str(tok));
     }
+    fn visit_ternary(&mut self, node: &Node, left: &Node, right: &Node) {
+        unimplemented!()
+    }
 }
 
 #[test]

@@ -9,6 +9,7 @@ pub trait Visitor {
             &Node::Root(ref inner) => self.visit_root(inner),
             &Node::Literal(ref inner) => self.visit_literal(inner),
             &Node::DomTag(ref inner) => self.visit_dom_tag(inner),
+            &Node::Ternary(ref node,ref left,ref right) => self.visit_ternary(node.as_ref(),left.as_ref(),right.as_ref()),
             _ => self.visit_undefined(node)
         }
     }
@@ -34,4 +35,5 @@ pub trait Visitor {
     fn visit_literal(&mut self, tok: &Token);
     /// 访问 DomTag
     fn visit_dom_tag(&mut self, tag: &DomTag);
+    fn visit_ternary(&mut self, node: &Node, left: &Node, right: &Node);
 }

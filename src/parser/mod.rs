@@ -93,7 +93,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-
+    /// 解析DOM标签属性
     fn parse_dom_attr(&mut self) -> Result<ast::DomAttr> {
         match self.take() {
             Ok(tok) => {
@@ -124,7 +124,7 @@ impl<'a> Parser<'a> {
             }
         }
     }
-
+    /// 解析DOM标签
     fn parse_dom_tag(&mut self, tok: Token) -> Result<ast::DomTag> {
         let mut tag = ast::DomTag::new(tok);
         loop {
@@ -177,33 +177,162 @@ impl<'a> Parser<'a> {
 
         return Ok(tag);
     }
-
+    /// 解析表达式的独立主体部分
     fn parse_primary(&mut self) -> Result<ast::Node> {
-        Ok(Node::Empty)
+        return self.take().and_then(|tok| -> Result<ast::Node>{
+            match tok.kind() {
+                &TokenKind::Identifier => {
+                    let val = self.tokenizer.source().content(&tok);
+                    //false|true
+                    if vec!['f' as u8, 'a' as u8, 'l' as u8, 's' as u8, 'e' as u8, ].compare(val)
+                        || vec!['t' as u8, 'r' as u8, 'u' as u8, 'e' as u8, ].compare(val) {
+                        return Ok(Node::Boolean(tok));
+                    }
+                    //null
+                    if vec!['n' as u8, 'u' as u8, 'l' as u8, 'l' as u8].compare(val) {
+                        return Ok(Node::None(tok));
+                    }
+                    return Ok(Node::Identifier(tok));
+                }
+                &TokenKind::Int => {
+                    return match self.skip_symbol(vec![vec!['.' as u8]]).and_then(|_| -> Result<Token> { self.expect_type(TokenKind::Int) }) {
+                        Ok(precision) => { return Ok(Node::Float(tok, precision)); }
+                        Err(Error::None) => { return Ok(Node::Integer(tok)); }
+                        Err(err) => { return Err(err); }
+                    };
+                }
+                &TokenKind::Symbol if vec!['(' as u8].compare(self.tokenizer.source().content(&tok)) => {
+                    match self.parse_group(vec![')' as u8]) {
+                        Ok(list) => { return Ok(Node::List(list)); }
+                        Err(err) => { return Err(err); }
+                    }
+                }
+                _ => { return Err(Error::Message(format!("unexpected token {:?}", tok))); }
+            }
+        });
     }
-
+    /// 解析成员访问
     fn parse_member_access(&mut self) -> Result<ast::Node> {
-        Ok(Node::Empty)
+        let node = self.parse_primary();
+        if node.is_err() { return node; }
+        let mut node = node.unwrap();
+        let symbols = vec![vec!['.' as u8], vec!['[' as u8], vec!['(' as u8]];
+        loop {
+            match self.skip_symbol(symbols.clone()) {
+                Ok(operator) => {
+                    if symbols[0].compare(self.tokenizer.source().content(&operator)) {
+                        match self.expect_type(TokenKind::Identifier) {
+                            Ok(tok) => {
+                                node = Node::Property(Box::new(node), vec![Node::String(tok)], operator);
+                            }
+                            Err(err) => { return Err(err); }
+                        }
+                    } else if symbols[1].compare(self.tokenizer.source().content(&operator)) {
+                        match self.parse_group(vec![']' as u8]) {
+                            Ok(list) => {
+                                node = Node::Property(Box::new(node), list, operator);
+                            }
+                            Err(err) => { return Err(err); }
+                        }
+                    } else if symbols[2].compare(self.tokenizer.source().content(&operator)) {
+                        match self.parse_group(vec![')' as u8]) {
+                            Ok(list) => {
+                                node = Node::Method(Box::new(node), list, operator);
+                            }
+                            Err(err) => { return Err(err); }
+                        }
+                    }
+                }
+                Err(err) => { return Err(err); }
+            }
+        }
+        return Ok(node);
     }
-
+    /// 解析一元运算
     fn parse_unary(&mut self) -> Result<ast::Node> {
-        Ok(Node::Empty)
+        match self.skip_symbol(vec![vec!['-' as u8], vec!['+' as u8]]) {
+            Ok(operator) => {
+                //TODO: - = neg, + = pos
+                let node = self.parse_member_access();
+                if node.is_err() { return node; }
+                return Ok(Node::Unary(Box::new(node.unwrap()), operator));
+            }
+            Err(err) => { return Err(err); }
+        }
+        return self.parse_member_access();
     }
-
+    /// 解析乘除运算
     fn parse_binary_mdm(&mut self) -> Result<ast::Node> {
-        Ok(Node::Empty)
+        let node = self.parse_unary();
+        if node.is_err() { return node; }
+        let mut node = node.unwrap();
+        loop {
+            match self.skip_symbol(vec![vec!['*' as u8], vec!['/' as u8], vec!['%' as u8]]) {
+                Ok(operator) => {
+                    let right = self.parse_unary();
+                    if right.is_err() { return right; }
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                }
+                Err(err) => { return Err(err); }
+            }
+        }
+        return Ok(node);
     }
-
+    /// 解析加减运算
     fn parse_binary_as(&mut self) -> Result<ast::Node> {
-        Ok(Node::Empty)
+        let node = self.parse_binary_mdm();
+        if node.is_err() { return node; }
+        let mut node = node.unwrap();
+        loop {
+            match self.skip_symbol(vec![vec!['+' as u8], vec!['-' as u8]]) {
+                Ok(operator) => {
+                    let right = self.parse_binary_mdm();
+                    if right.is_err() { return right; }
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                }
+                Err(err) => { return Err(err); }
+            }
+        }
+        return Ok(node);
     }
-
+    /// 解析比较运算
     fn parse_compare(&mut self) -> Result<ast::Node> {
-        Ok(Node::Empty)
+        let node = self.parse_binary_as();
+        if node.is_err() { return node; }
+        let mut node = node.unwrap();
+        loop {
+            match self.skip_symbol(vec![vec!['=' as u8, '=' as u8]
+                                        , vec!['!' as u8, '=' as u8]
+                                        , vec!['<' as u8, '=' as u8]
+                                        , vec!['>' as u8, '=' as u8]
+                                        , vec!['<' as u8]
+                                        , vec!['>' as u8]]) {
+                Ok(operator) => {
+                    let right = self.parse_binary_as();
+                    if right.is_err() { return right; }
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                }
+                Err(err) => { return Err(err); }
+            }
+        }
+        return Ok(node);
     }
-
+    /// 解析逻辑运算
     fn parse_logic(&mut self) -> Result<ast::Node> {
-        Ok(Node::Empty)
+        let node = self.parse_compare();
+        if node.is_err() { return node; }
+        let mut node = node.unwrap();
+        loop {
+            match self.skip_symbol(vec![vec!['?' as u8, '?' as u8], vec!['|' as u8, '|' as u8], vec!['&' as u8, '&' as u8]]) {
+                Ok(operator) => {
+                    let right = self.parse_compare();
+                    if right.is_err() { return right; }
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                }
+                Err(err) => { return Err(err); }
+            }
+        }
+        return Ok(node);
     }
     /// 解析三目运算
     fn parse_ternary(&mut self) -> Result<ast::Node> {
@@ -232,6 +361,35 @@ impl<'a> Parser<'a> {
     fn parse_expression(&mut self) -> Result<ast::Node> {
         self.parse_ternary()
     }
+    /// 解析一个组
+    fn parse_group(&mut self, end: Vec<u8>) -> Result<NodeList> {
+        let mut list = vec![];
+        match self.skip_symbol(vec![end]) {
+            Ok(_) => { return Ok(list); }
+            Err(err) => { return Err(err); }
+        }
+        loop {
+            match self.parse_expression() {
+                Ok(node) => {
+                    list.push(node);
+                }
+                Err(Error::None) => { return Err(Error::Message("expected 表达式".to_string())); }
+                Err(err) => { return Err(err); }
+            }
+            match self.skip_symbol(vec![end.clone(), vec![',' as u8]]) {
+                Ok(tok) => {
+                    let val = self.tokenizer.source().content(&tok);
+                    if end.compare(val) {
+                        return Ok(list);
+                    }
+                }
+                Err(Error::None) => { return Err(Error::Message("expected '".to_string())); }
+                Err(err) => { return Err(err); }
+            }
+        }
+    }
+    fn parse_dict() {}
+
     /// 解析代码段
     fn parse_statement(&mut self) -> Result<ast::Node> {
         let mut list = vec![];
@@ -254,7 +412,6 @@ impl<'a> Parser<'a> {
                 err => { return err; }
             }
         }
-        //        return Ok(Node::Statement(list));
     }
 
     fn parse(&mut self) -> Result<ast::Node> {

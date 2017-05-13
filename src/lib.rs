@@ -12,6 +12,7 @@ use std::result;
 pub enum Error {
     None,
     EOF,
+    Ok,
     Message(String),
     RefMessage(String, usize,usize,String),
 }
