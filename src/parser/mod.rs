@@ -427,8 +427,13 @@ impl<'a> Parser<'a> {
     }
     fn parse_dict() {}
     fn parse_else(&mut self, key: Vec<u8>) -> Result<ast::Node> {
+        //跳过边界
+        match self.expect_type(TokenKind::RDelimiter) {
+            Ok(_) => {}
+            Err(err) => { return Err(err); }
+        }
         self.set_breakpoint(BreakPoint::build(vec![
-            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['/' as u8], key]),
+            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['{' as u8, '{' as u8, ], vec!['/' as u8], key]),
         ]));
         let mut body = vec![];
         match self.parse_until(&mut body) {
@@ -437,11 +442,6 @@ impl<'a> Parser<'a> {
             Err(err) => { return Err(err); }
         }
         self.pop_breakpoint();
-        //跳过边界
-        match self.expect_type(TokenKind::RDelimiter) {
-            Ok(_) => {}
-            Err(err) => { return Err(err); }
-        }
         return Ok(Node::Else(body));
     }
     fn parse_if(&mut self) -> Result<ast::Node> {
