@@ -7,7 +7,7 @@ use {Error, Result};
 use std::str::from_utf8_unchecked;
 
 /// 符号表
-static SYMBOLS: [u8; 16] = [
+static SYMBOLS: [u8; 17] = [
     '+' as u8,
     '-' as u8,
     '*' as u8,
@@ -19,6 +19,7 @@ static SYMBOLS: [u8; 16] = [
     '<' as u8,
     '!' as u8,
     '|' as u8,
+    '&' as u8,
     '(' as u8,
     ')' as u8,
     '[' as u8,
@@ -280,36 +281,36 @@ impl<'a> BytesScanner<'a> {
                 if end > 0 {
                     return Ok(Token(TokenKind::String, start, end))
                 }
-                return Err(self.err(format!("expected string , but not found end character {}.", ch as char), start));
+                return Err(self.err(format!("expected string , but not found end character {}", ch as char), start));
             }
             //扫描重叠符号 ++ -- || == ?? &&
             ascii::PLS | ascii::SUB | ascii::VER | ascii::EQS | ascii::QUM | ascii::AMP
             if self.match_forward(ch) => {
                 self.forward();
                 self.forward();
-                return Ok(Token(TokenKind::Symbol, self.offset - 1, self.offset))
+                return Ok(Token(TokenKind::Symbol, self.offset - 2, self.offset))
             }
             //扫描双符号 !=
             ascii::NOT if self.match_forward(ascii::EQS) => {
                 self.forward();
                 self.forward();
-                return Ok(Token(TokenKind::Symbol, self.offset - 1, self.offset))
+                return Ok(Token(TokenKind::Symbol, self.offset - 2, self.offset))
             }
             //扫描双符号 <=
             ascii::LSS if self.match_forward(ascii::EQS) => {
                 self.forward();
                 self.forward();
-                return Ok(Token(TokenKind::Symbol, self.offset - 1, self.offset))
+                return Ok(Token(TokenKind::Symbol, self.offset - 2, self.offset))
             }
             //扫描双符号 >=
             ascii::GTR if self.match_forward(ascii::EQS) => {
                 self.forward();
                 self.forward();
-                return Ok(Token(TokenKind::Symbol, self.offset - 1, self.offset))
+                return Ok(Token(TokenKind::Symbol, self.offset - 2, self.offset))
             }
-            //扫描单符合 + - * / % = : , @  . | ( ) [ ] < > !
-            ascii::PLS | ascii::SUB | ascii::MUL | ascii::REM | ascii::EQS | ascii::COLON | ascii::COMMA
-            | ascii::DOT | ascii::VER | ascii::LPA | ascii::RPA | ascii::LSQ | ascii::RSQ
+            //扫描单符合 + - * / % = : ,  . | ( ) [ ] < > !
+            ascii::PLS | ascii::SUB | ascii::MUL | ascii::SLA| ascii::REM | ascii::EQS | ascii::COLON
+            | ascii::COMMA | ascii::DOT | ascii::VER | ascii::LPA | ascii::RPA | ascii::LSQ | ascii::RSQ
             | ascii::LSS | ascii::GTR | ascii::NOT => {
                 self.forward();
                 return Ok(Token(TokenKind::Symbol, self.offset - 1, self.offset))
@@ -321,7 +322,7 @@ impl<'a> BytesScanner<'a> {
                     if self.find_sp() {
                         return Ok(Token(TokenKind::Int, pos, self.offset));
                     } else if is_digit(self.ch) { continue; }
-                    return Err(self.err(format!("unexpected  character {:?}.", ch as char), pos));
+                    return Err(self.err(format!("unexpected  character {:?}", ch as char), pos));
                 }
             }
             // 扫描标识 a-zA-Z
@@ -332,12 +333,12 @@ impl<'a> BytesScanner<'a> {
                     if self.find_sp() {
                         return Ok(Token(TokenKind::Identifier, pos, self.offset));
                     } else if is_digit(ch) || is_lower_letter(ch) || is_upper_letter(ch) || ch == ascii::UND { continue; }
-                    return Err(self.err(format!("unexpected  character {:?}.", ch as char), pos));
+                    return Err(self.err(format!("unexpected  character {:?}", ch as char), pos));
                 }
             }
             _ => {}
         }
-        return Err(self.err(format!("unexpected  character {:?}.", ch as char), self.offset));
+        return Err(self.err(format!("unexpected  character {:?}.1", ch as char), self.offset));
     }
 
     /// 扫描字面含义输出段

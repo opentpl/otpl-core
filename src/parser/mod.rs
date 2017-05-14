@@ -77,7 +77,7 @@ impl<'a> Parser<'a> {
             if tok.kind() == &kind {
                 return Ok(tok);
             }
-            return Err(Error::Message(format!("expected type {:?}, found {:?}. {:?}", kind, *tok.kind(), tok)));
+            return Err(Error::Message(format!("expected type {:?}, found {:?}", kind, tok)));
         });
 
         // return Err(Error::Message(format!("expected type {:?}, but EOF.", kind)));
@@ -90,6 +90,13 @@ impl<'a> Parser<'a> {
                 return Error::ok();
             }
             return Err(Error::Message(format!("expected value {:?}, found {:?}. {:?}", value, content, tok)));
+        }).map_err(|err| -> Error{
+            match err {
+                Error::None => {
+                    return Error::Message(format!("expect_value: 代码未结束 {:?}", err))
+                }
+                _ => { return err; }
+            }
         });
     }
 
@@ -179,6 +186,7 @@ impl<'a> Parser<'a> {
     }
     /// 解析表达式的独立主体部分
     fn parse_primary(&mut self) -> Result<ast::Node> {
+        println!("parse_primary");
         return self.take().and_then(|tok| -> Result<ast::Node>{
             match tok.kind() {
                 &TokenKind::Identifier => {
@@ -192,12 +200,16 @@ impl<'a> Parser<'a> {
                     if vec!['n' as u8, 'u' as u8, 'l' as u8, 'l' as u8].compare(val) {
                         return Ok(Node::None(tok));
                     }
+                    println!("Identifier:bbbbbbbbbbbbbbbbb");
                     return Ok(Node::Identifier(tok));
                 }
                 &TokenKind::Int => {
                     return match self.skip_symbol(vec![vec!['.' as u8]]).and_then(|_| -> Result<Token> { self.expect_type(TokenKind::Int) }) {
                         Ok(precision) => { return Ok(Node::Float(tok, precision)); }
-                        Err(Error::None) => { return Ok(Node::Integer(tok)); }
+                        Err(Error::None) => {
+                            println!("Identifier:int");
+                            return Ok(Node::Integer(tok));
+                        }
                         Err(err) => { return Err(err); }
                     };
                 }
@@ -207,12 +219,20 @@ impl<'a> Parser<'a> {
                         Err(err) => { return Err(err); }
                     }
                 }
-                _ => { return Err(Error::Message(format!("unexpected token {:?}", tok))); }
+                _ => { return Err(Error::Message(format!("parse_primary: unexpected token {:?}", tok))); }
+            }
+        }).map_err(|err| -> Error{
+            match err {
+                Error::None => {
+                    return Error::Message(format!("parse_primary: 代码未结束 {:?}", err))
+                }
+                _ => { return err; }
             }
         });
     }
     /// 解析成员访问
     fn parse_member_access(&mut self) -> Result<ast::Node> {
+        println!("parse_member_access");
         let node = self.parse_primary();
         if node.is_err() { return node; }
         let mut node = node.unwrap();
@@ -243,6 +263,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
+                Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
         }
@@ -250,6 +271,7 @@ impl<'a> Parser<'a> {
     }
     /// 解析一元运算
     fn parse_unary(&mut self) -> Result<ast::Node> {
+        println!("parse_unary");
         match self.skip_symbol(vec![vec!['-' as u8], vec!['+' as u8]]) {
             Ok(operator) => {
                 //TODO: - = neg, + = pos
@@ -257,12 +279,17 @@ impl<'a> Parser<'a> {
                 if node.is_err() { return node; }
                 return Ok(Node::Unary(Box::new(node.unwrap()), operator));
             }
-            Err(err) => { return Err(err); }
+            Err(Error::None) => {}
+            Err(err) => {
+                println!("parse_unary:err:{:?}", err);
+                return Err(err);
+            }
         }
         return self.parse_member_access();
     }
     /// 解析乘除运算
     fn parse_binary_mdm(&mut self) -> Result<ast::Node> {
+        println!("parse_binary_mdm");
         let node = self.parse_unary();
         if node.is_err() { return node; }
         let mut node = node.unwrap();
@@ -273,6 +300,7 @@ impl<'a> Parser<'a> {
                     if right.is_err() { return right; }
                     node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
                 }
+                Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
         }
@@ -280,6 +308,7 @@ impl<'a> Parser<'a> {
     }
     /// 解析加减运算
     fn parse_binary_as(&mut self) -> Result<ast::Node> {
+        println!("parse_binary_as");
         let node = self.parse_binary_mdm();
         if node.is_err() { return node; }
         let mut node = node.unwrap();
@@ -290,6 +319,7 @@ impl<'a> Parser<'a> {
                     if right.is_err() { return right; }
                     node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
                 }
+                Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
         }
@@ -297,6 +327,7 @@ impl<'a> Parser<'a> {
     }
     /// 解析比较运算
     fn parse_compare(&mut self) -> Result<ast::Node> {
+        println!("parse_compare");
         let node = self.parse_binary_as();
         if node.is_err() { return node; }
         let mut node = node.unwrap();
@@ -312,6 +343,7 @@ impl<'a> Parser<'a> {
                     if right.is_err() { return right; }
                     node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
                 }
+                Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
         }
@@ -319,6 +351,7 @@ impl<'a> Parser<'a> {
     }
     /// 解析逻辑运算
     fn parse_logic(&mut self) -> Result<ast::Node> {
+        println!("parse_logic");
         let node = self.parse_compare();
         if node.is_err() { return node; }
         let mut node = node.unwrap();
@@ -329,6 +362,7 @@ impl<'a> Parser<'a> {
                     if right.is_err() { return right; }
                     node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
                 }
+                Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
         }
@@ -336,6 +370,7 @@ impl<'a> Parser<'a> {
     }
     /// 解析三目运算
     fn parse_ternary(&mut self) -> Result<ast::Node> {
+        println!("parse_ternary");
         let node = self.parse_logic();
         if node.is_err() { return node; }
         let mut node = node.unwrap();
@@ -352,6 +387,7 @@ impl<'a> Parser<'a> {
                     if right.is_err() { return right; }
                     node = Node::Ternary(Box::new(node), Box::new(left.unwrap()), Box::new(right.unwrap()));
                 }
+                Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
             }
         }
@@ -363,6 +399,7 @@ impl<'a> Parser<'a> {
     }
     /// 解析一个组
     fn parse_group(&mut self, end: Vec<u8>) -> Result<NodeList> {
+        println!("parse_group");
         let mut list = vec![];
         match self.skip_symbol(vec![end]) {
             Ok(_) => { return Ok(list); }
@@ -389,19 +426,106 @@ impl<'a> Parser<'a> {
         }
     }
     fn parse_dict() {}
+    fn parse_else(&mut self, key: Vec<u8>) -> Result<ast::Node> {
+        self.set_breakpoint(BreakPoint::build(vec![
+            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['/' as u8], key]),
+        ]));
+        let mut body = vec![];
+        match self.parse_until(&mut body) {
+            Ok(_) => {}
+            Err(Error::None) => { return Err(Error::Message("XX 命令未结束：语法/xx".to_string())); }
+            Err(err) => { return Err(err); }
+        }
+        self.pop_breakpoint();
+        //跳过边界
+        match self.expect_type(TokenKind::RDelimiter) {
+            Ok(_) => {}
+            Err(err) => { return Err(err); }
+        }
+        return Ok(Node::Else(body));
+    }
+    fn parse_if(&mut self) -> Result<ast::Node> {
+        println!("parse_if");
+        let condition = self.parse_expression();
+        if condition.is_err() { return condition; }
+        //跳过边界
+        match self.expect_type(TokenKind::RDelimiter) {
+            Ok(_) => {}
+            Err(err) => {
+                println!("zzzzzzzzz");
+                return Err(err);
+            }
+        }
+        println!("xxxxxxxxxxxxxxxxxxxxx");
+        self.set_breakpoint(BreakPoint::build(vec![
+            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['{' as u8, '{' as u8, ], vec!['e' as u8, 'l' as u8, 'i' as u8, 'f' as u8, ]]),
+            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['{' as u8, '{' as u8, ], vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ]]),
+            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['{' as u8, '{' as u8, ], vec!['/' as u8], vec!['i' as u8, 'f' as u8, ]]),
+        ]));
+        let mut body = vec![];
+        match self.parse_until(&mut body) {
+            Ok(_) => {}
+            Err(Error::None) => { return Err(Error::Message("if 命令未结束：必须至少包含 elif 或 else 或 /if其中之一".to_string())); }
+            Err(err) => { return Err(err); }
+        }
+        self.pop_breakpoint();
+        let mut items = vec![];
+        loop {
+            match self.skip_type(TokenKind::LDelimiter).and_then(|tok| -> Option<Token>{
+                return self.skip_type(TokenKind::Identifier).or_else(|| -> Option<Token>{
+                    self.back(tok);
+                    return None;
+                });
+            }).ok_or(Error::None).and_then(|tok| -> Result<ast::Node> {
+                //elif
+                if vec!['e' as u8, 'l' as u8, 'i' as u8, 'f' as u8, ]
+                    .compare(self.tokenizer.source().content(&tok)) {
+                    return self.parse_if();
+                }
+                //else
+                if vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ]
+                    .compare(self.tokenizer.source().content(&tok)) {
+                    return self.parse_else(vec!['i' as u8, 'f' as u8, ]);
+                }
+                self.back(tok);
+                return Err(Error::None);
+            }) {
+                Ok(node) => {
+                    items.push(node);
+                }
+                Err(Error::None) => { break; }
+                err => { return err; }
+            }
+        }
+
+        match self.expect_type(TokenKind::LDelimiter)
+            .and_then(|_| -> NoneResult{ self.expect_value(vec!['/' as u8]) })
+            .and_then(|_| -> NoneResult{ self.expect_value(vec!['i' as u8, 'f' as u8, ]) }) {
+            Ok(_) => { return Ok(Node::If(Box::new(condition.unwrap()), body, items)); }
+            Err(Error::None) => { return Err(Error::Message("if 命令未结束：必须以/if结束".to_string())); }
+            Err(err) => { return Err(err); }
+        }
+    }
 
     /// 解析代码段
     fn parse_statement(&mut self) -> Result<ast::Node> {
+        println!("parse_statement");
         let mut list = vec![];
         loop {
             match self.take().and_then(|tok| -> Result<ast::Node>{
                 return match tok.kind() {
                     &TokenKind::RDelimiter => { return Err(Error::None); }
                     &TokenKind::Identifier => {
+                        println!("yyyyyyyyyyyyyyyyyyyy");
+                        //if
+                        if vec!['i' as u8, 'f' as u8, ].compare(self.tokenizer.source().content(&tok)) {
+                            return self.parse_if();
+                        }
+                        println!("zzzzzzzzzzzzzzzzzzzzz");
                         return self.parse_expression();
                     }
                     _ => {
-                        return Err(Error::Message(format!("unexpected token {:?}", tok)));
+                        return Err(Error::Message(format!("parse_statement: unexpected token {:?}", tok)));
                     }
                 };
             }) {
@@ -423,6 +547,7 @@ impl<'a> Parser<'a> {
                     });
                 }
                 &TokenKind::LDelimiter => {
+                    println!("ffffffffffffff");
                     return self.parse_statement();
                 }
                 &TokenKind::Data => {

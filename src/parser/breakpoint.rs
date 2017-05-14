@@ -1,9 +1,10 @@
 use token::{Token, TokenKind};
 use {Error, NoneResult};
-use util::{VecSliceCompare,Stack};
+use util::{VecSliceCompare, Stack};
 use super::Parser;
 
 /// 定义用于解析过程中的断点。
+#[derive(Debug)]
 pub struct BreakPoint {
     /// 是否保留已检查的token
     pub keep: bool,
@@ -30,7 +31,7 @@ impl BreakPoint {
 
                 for value in &point.values {
                     match parser.take().and_then(|tok| -> NoneResult{
-                        //println!("bbbbbbbbbb{:?}", parser.tokenizer.source().content(&tok)[0] as char);
+                        println!("BreakPoint:{:?}", parser.tokenizer.source().content_str(&tok));
                         if &point.kind == tok.kind() && value.compare(parser.tokenizer.source().content(&tok)) {
                             //println!("bbbbbbbbbb{:?}", 2);
                         } else if point.kind == TokenKind::Ignore && value.compare(parser.tokenizer.source().content(&tok)) {
@@ -46,19 +47,18 @@ impl BreakPoint {
                         Err(Error::None) => {
                             //println!("bbbbbbbbbb{:?}", 0);
                             found = false;
+                            break;
                         }
                         err => { return err; }
                     }
-
-                    if !found { break; }
                 }
 
                 if !found || point.keep {
                     while !buf.is_empty() {
-                        parser.back(buf.take().unwrap());
+                        parser.back(buf.pop().unwrap());
                     }
                 }
-
+                println!("BreakPoint out:{:?}  {:?}", found,point);
                 if found { return Error::ok(); }
             }
 

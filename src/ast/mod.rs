@@ -39,7 +39,10 @@ pub enum Node {
     None(Token),
     Identifier(Token),
     List(NodeList),
-
+    /// if条件表达式（condition, body, items）
+    If(Box<Node>,NodeList,NodeList),
+    /// else表达式（body）
+    Else(NodeList),
 }
 
 #[derive(Debug)]
