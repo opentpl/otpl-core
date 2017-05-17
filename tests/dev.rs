@@ -24,6 +24,7 @@ impl<'a> Visitor for TestVisitor<'a> {
 }
 
 #[test]
+#[ignore]
 fn test_dev() {
     let buf = read_file("./tests/dev.html");
     //
