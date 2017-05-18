@@ -10,6 +10,27 @@ use util::{VecSliceCompare};
 
 use {Error, Result, NoneResult};
 
+fn optimize_literal(value: &[u8]) -> (usize, usize) {
+    let mut start = 0usize;
+    let mut end = value.len();
+    for i in 0..value.len() {
+        let ch = value[i];
+        if !(ch == ('\r' as u8) || ch == ('\n' as u8) || ch == ('\t' as u8) || ch == (' ' as u8)) {
+            start = i;
+            break;
+        }
+    }
+    for i in (0..value.len()).rev() {
+        let ch = value[i];
+        if !(ch == ('\r' as u8) || ch == ('\n' as u8) || ch == ('\t' as u8) || ch == (' ' as u8)) {
+            end = i + 1;
+            break;
+        }
+        end = i;
+    }
+    println!("abc:{} {} {}", start, end, value.len());
+    return (start, end);
+}
 
 pub struct Parser<'a> {
     tokenizer: &'a mut Tokenizer,
@@ -132,13 +153,15 @@ impl<'a> Parser<'a> {
         }
     }
     /// 解析DOM标签
-    fn parse_dom_tag(&mut self, tok: Token) -> Result<ast::DomTag> {
-        let mut tag = ast::DomTag::new(tok);
+    fn parse_dom_tag(&mut self, tag: Token) -> Result<ast::Node> {
+        //let mut tag = ast::DomTag::new(tok);
+        let mut attrs=vec![];
+        let mut children=vec![];
         loop {
             match self.parse_dom_attr() {
                 Ok(attr) => {
                     //println!("0=>>>>>>>>>>>>{:?}", attr);
-                    tag.attrs.push(attr);
+                    attrs.push(attr);
                 }
                 Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
@@ -149,20 +172,20 @@ impl<'a> Parser<'a> {
             Ok(tok) => {
                 // 如果是独立标签 /
                 if self.tokenizer.source().content(&tok)[0] == ascii::SLA {
-                    return Ok(tag);
+                    return Ok(Node::DomTag(tag,attrs,children));
                 }
             }
             Err(Error::None) => { return Err(Error::None); } //TODO:重新定义错误：标签未结束
             Err(err) => { return Err(err); }
         }
-        let name = self.tokenizer.source().content_vec(&tag.name);
+        let name = self.tokenizer.source().content_vec(&tag);
         //println!("bbbbbbbbbb:{:?}", String::from_utf8(name.clone()).unwrap());
         //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
             BreakPoint::new(false, TokenKind::DomCTag, vec![name]),
         ]));
 
-        match self.parse_until(&mut tag.children) {
+        match self.parse_until(&mut children) {
             Ok(_) => {
                 //println!("vvvvvvvvvvvvvvv");
             }
@@ -182,7 +205,7 @@ impl<'a> Parser<'a> {
         //            tag.children.remove(index);
         //        }
 
-        return Ok(tag);
+        return Ok(Node::DomTag(tag,attrs,children));
     }
     /// 解析表达式的独立主体部分
     fn parse_primary(&mut self) -> Result<ast::Node> {
@@ -542,15 +565,18 @@ impl<'a> Parser<'a> {
         return self.take().and_then(|tok| -> Result<ast::Node>{
             match tok.kind() {
                 &TokenKind::DomTagStart => {
-                    return self.parse_dom_tag(tok).and_then(|node| -> Result<ast::Node>{
-                        return Ok(Node::DomTag(node));
-                    });
+                    return self.parse_dom_tag(tok);
                 }
                 &TokenKind::LDelimiter => {
                     println!("ffffffffffffff");
                     return self.parse_statement();
                 }
                 &TokenKind::Data => {
+                    let (start, end) = optimize_literal(self.tokenizer.source().content(&tok));
+                    if end == 0 {
+                        return Ok(Node::Empty);
+                    }
+                    let tok = Token(TokenKind::Data, tok.1 + start, tok.1 + end);
                     return Ok(Node::Literal(tok));
                 }
                 _ => {
@@ -577,6 +603,7 @@ impl<'a> Parser<'a> {
             }
 
             match self.parse() {
+                Ok(Node::Empty) => {}
                 Ok(node) => { buf.push(node) }
                 Err(Error::None) | Err(Error::EOF) => { break; }
                 Err(err) => { return Err(err); }
@@ -589,20 +616,22 @@ impl<'a> Parser<'a> {
         return Err(Error::None);
     }
 
-    fn parse_all(&mut self, buf: &mut NodeList) -> NoneResult {
+    pub fn parse_all(&mut self) -> Result<NodeList> {
+        let mut list = vec![];
         loop {
             match self.parse() {
-                Ok(node) => { buf.push(node) }
+                Ok(Node::Empty) => {}
+                Ok(node) => { list.push(node) }
                 Err(Error::None) | Err(Error::EOF) => { break; }
                 Err(err) => { return Err(err); }
             }
         }
-        return Error::ok();
+        return Ok(list);
     }
 
-    pub fn parse_root(&mut self) -> ast::Node {
-        let mut root = ast::Root::new();
-        self.parse_all(&mut root.body).expect("Failed to parse");
-        return Node::Root(root);
-    }
+    //    pub fn parse_root(&mut self) -> ast::Node {
+    //        let mut root = ast::Root::new();
+    //        self.parse_all(&mut root.body).expect("Failed to parse");
+    //        return Node::Root(root);
+    //    }
 }
