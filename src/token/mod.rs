@@ -25,6 +25,8 @@ pub enum TokenKind {
     DomAttrStart,
     /// DOM标签属性的结束
     DomAttrEnd,
+    /// DOM标签属性的结束
+    DomAttrValue,
     /// DOM标签的闭合部分，如：</div>
     DomCTag,
     /// DOM注释
@@ -52,4 +54,8 @@ impl PartialEq<Token> for Token {
     fn eq(&self, other: &Token) -> bool {
         self.0 == other.0 && self.1 == other.1 && self.2 == other.2
     }
+}
+
+enum NewToken{
+    Dom(Vec<u8>,usize)
 }

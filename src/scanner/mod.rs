@@ -43,4 +43,6 @@ pub trait Tokenizer: Debug {
     fn unmark(&mut self);
     /// 重新设置最新的还原点
     fn reset(&mut self);
+    /// 创建子扫描
+    fn new_tokenizer(&self,source: &[u8], filename: &Path) -> Box<Tokenizer>;
 }

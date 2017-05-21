@@ -3,6 +3,7 @@ mod prelude;
 use self::prelude::*;
 
 use std::io::Write;
+use self::prelude::otpl::util::VecSliceCompare;
 
 #[derive(Debug)]
 struct StringWriter {
@@ -80,6 +81,23 @@ impl<'a> Visitor for Compiler<'a> {
         self.1.write("})())".as_ref());
     }
     fn visit_dom_tag(&mut self, name: &Token, attrs: &Vec<ast::DomAttr>, children: &NodeList) {
+        //处理扩展命令
+//        for i in 0..attrs.len() {
+//            let name=self.0.content(&attrs[i].name);
+//            if name[0]!='@' as u8{
+//                continue;
+//            }
+//            let name=&name[1..name.len()];
+//            if vec!['i' as u8, 'f' as u8].compare(name){
+//                let mut new_attrs=vec![];
+//                for attr in attrs {
+//                    new_attrs.push((*attr).clone());
+//                }
+//                new_attrs.remove(i);
+//                self.visit_if()
+//            }
+//        }
+
         self.1.write("xview.createElement(xview.getDenined('".as_ref());
         self.1.write(self.0.content(&name));
         self.1.write("'),xview.procProperties({".as_ref());
@@ -113,13 +131,79 @@ impl<'a> Visitor for Compiler<'a> {
         self.1.write(self.0.content(&tok));
         self.1.write("`".as_ref());
     }
-    fn visit_ternary(&mut self, node: &Node, left: &Node, right: &Node) {
+    fn visit_ternary(&mut self, expr: &Node, left: &Node, right: &Node) {
+        self.1.write("visit_ternary".as_ref());
+    }
+
+    fn visit_binary(&mut self, left: &Node, right: &Node, operator: &Token) {
+        self.visit(left);
+        let op=self.0.content(&operator);
+        if vec!['+' as u8,].compare(op){
+            self.1.write(" + ".as_ref());
+        } else if vec!['-' as u8,].compare(op){
+            self.1.write(" * ".as_ref());
+        } else if vec!['*' as u8,].compare(op){
+            self.1.write(" * ".as_ref());
+        } else if vec!['/' as u8,].compare(op){
+            self.1.write(" / ".as_ref());
+        } else if vec!['%' as u8,].compare(op){
+            self.1.write(" % ".as_ref());
+        }
+        self.visit(right);
+    }
+
+    fn visit_unary(&mut self, body: &Node, operator: &Token) {
+        self.1.write("visit_unary".as_ref());
+    }
+
+    fn visit_property(&mut self, obj: &Node, params: &NodeList, operator: &Token) {
+        self.1.write("visit_property".as_ref());
+    }
+
+    fn visit_method(&mut self, obj: &Node, params: &NodeList, operator: &Token) {
+        self.1.write("visit_method".as_ref());
+    }
+
+    fn visit_string(&mut self, tok: &Token) {
+        self.1.write("visit_string".as_ref());
+    }
+
+    fn visit_boolean(&mut self, tok: &Token) {
+        self.1.write("visit_boolean".as_ref());
+    }
+
+    fn visit_integer(&mut self, tok: &Token) {
+        self.1.write(self.0.content(&tok));
+    }
+
+    fn visit_float(&mut self, integer: &Token, decimal: &Token) {
+        self.1.write("visit_float".as_ref());
+    }
+
+    fn visit_none(&mut self, tok: &Token) {
+        unimplemented!()
+    }
+
+    fn visit_identifier(&mut self, tok: &Token) {
+        self.1.write(self.0.content(&tok));
+    }
+
+    fn visit_if(&mut self, condition: &Node, body: &NodeList, branches: &NodeList) {
+        self.1.write("if (".as_ref());
+        self.visit(condition);
+        self.1.write(") {".as_ref());
+        self.visit_list(body);
+        self.1.write("}".as_ref());
+        self.visit_list(branches);
+    }
+
+    fn visit_else(&mut self, body: &NodeList) {
         unimplemented!()
     }
 }
 
 #[test]
-//#[ignore]
+#[ignore]
 fn test_pure_dom() {
     let buf = read_file("./tests/pure_dom.html");
 
@@ -136,6 +220,33 @@ fn test_pure_dom() {
         {
             let mut visitor = Compiler(&scanner, &mut writer, 0);
             let root = Node::Root(root.expect("Failed to parse"));
+            visitor.visit(&root);
+            println!("Visit Done! ==============================");
+        }
+
+        println!("{}", writer.to_str());
+    }
+    //end
+}
+
+#[test]
+//#[ignore]
+fn test_extend_if() {
+    let buf = read_file("./tests/dom_extend_if.html");
+
+    let mut scanner = BytesScanner::new(&buf, "source".as_ref());
+    let root: ast::NodeList;
+    {
+        let mut parser = Parser::new(&mut scanner);
+        root = parser.parse_all().expect("Failed to parse");
+        println!("Parse Done! ==============================");
+    }
+
+    {
+        let mut writer = StringWriter::new();
+        {
+            let mut visitor = Compiler(&scanner, &mut writer, 0);
+            let root = Node::Root(root);
             visitor.visit(&root);
             println!("Visit Done! ==============================");
         }

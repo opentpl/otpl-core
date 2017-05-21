@@ -7,8 +7,9 @@ use ast::{Node, NodeList};
 use token::{Token, TokenKind, ascii};
 use scanner::{Tokenizer};
 use util::{VecSliceCompare};
-
+use scanner::BytesScanner;
 use {Error, Result, NoneResult};
+use std::str::from_utf8_unchecked;
 
 fn optimize_literal(value: &[u8]) -> (usize, usize) {
     let mut start = 0usize;
@@ -123,13 +124,68 @@ impl<'a> Parser<'a> {
 
     /// 解析DOM标签属性
     fn parse_dom_attr(&mut self) -> Result<ast::DomAttr> {
+        println!("parse_dom_attr");
         match self.take() {
             Ok(tok) => {
                 if &TokenKind::DomAttrStart != tok.kind() {
                     self.back(tok);
                     return Err(Error::None);
                 }
-                let mut node = ast::DomAttr::new(tok);
+                //let is_extend=self.tokenizer.source().content(&tok)[0]=='@' as u8;
+                let mut node = ast::DomAttr::new(tok.clone());
+                return self.expect_type(TokenKind::DomAttrValue).and_then(|attr_val| -> NoneResult{
+                    let val = self.tokenizer.source().content(&attr_val);
+                    let name = self.tokenizer.source().content(&tok);
+                    let pos = attr_val.1;
+                    let mut value: Result<NodeList>;
+                    if name[0] == '@' as u8 {
+                        let name = &name[1..name.len()];
+                        let start = name.len() + 3;
+                        let mut s = String::from("{{");
+                        s += unsafe { from_utf8_unchecked(name) };
+                        s += " ";
+                        s += unsafe { from_utf8_unchecked(val) };
+                        s += "}}";
+                        s += "{{/";
+                        s += unsafe { from_utf8_unchecked(name) };
+                        s += "}}";
+                        println!("2=>>>>>>>>>> {:?}", s);
+                        let mut inner = BytesScanner::new(s.as_bytes(), "inner-ext".as_ref());
+                        let mut buf = vec![];
+                        loop {
+                            match inner.scan() {
+                                Ok(mut tok) => {
+                                    tok.1 = pos + tok.1;
+                                    tok.1 = pos + tok.2;
+                                    buf.push(tok);
+                                }
+                                Err(Error::EOF) => { break; }
+                                Err(err) => { return Err(err); }
+                            }
+                        }
+                        println!("4=>>>>>>>>>> {:?} {:?}", pos, buf);
+                        for tok in buf {
+                            Tokenizer::back(&mut inner, tok);
+                        }
+                        let mut parser = Parser::new(&mut inner);
+                        value = parser.parse_all();
+                    } else {
+                        let mut inner = BytesScanner::new(val, "inner-ext".as_ref());
+                        let mut parser = Parser::new(&mut inner);
+                        value = parser.parse_all();
+                    }
+                    println!("3=>>>>>>>>>> {:?}", value);
+                    match value {
+                        Ok(mut list) => {
+                            node.value.append(&mut list);
+                        }
+                        //TODO: 重写错误定位
+                        Err(err) => { return Err(err); }
+                    }
+                    return Error::ok();
+                }).and_then(|_| self.expect_type(TokenKind::DomAttrEnd)).and_then(|_| Ok(node));
+                /*
+                //TODO: 如果没有=号的情况
                 return self.skip_symbol(vec![vec![ascii::EQS]])
                     .and_then(|_| -> NoneResult {
                         self.set_breakpoint(Box::new(|parser: &mut Parser| -> NoneResult {
@@ -139,6 +195,7 @@ impl<'a> Parser<'a> {
                             }
                             return Err(Error::None);
                         }));
+                        println!("parse_dom_attr-value");
                         let rst = self.parse_until(&mut node.value);
                         // println!("4=>>>>>>>>>>>>{:?}", node);
                         self.pop_breakpoint();
@@ -146,6 +203,7 @@ impl<'a> Parser<'a> {
                     })
                     .and_then(|_| self.expect_type(TokenKind::DomAttrEnd))
                     .and_then(|_| Ok(node));
+                */
             }
             Err(err) => {
                 return Err(err);
@@ -154,9 +212,9 @@ impl<'a> Parser<'a> {
     }
     /// 解析DOM标签
     fn parse_dom_tag(&mut self, tag: Token) -> Result<ast::Node> {
-        //let mut tag = ast::DomTag::new(tok);
-        let mut attrs=vec![];
-        let mut children=vec![];
+        println!("parse_dom_tag");
+        let mut attrs = vec![];
+        let mut children = vec![];
         loop {
             match self.parse_dom_attr() {
                 Ok(attr) => {
@@ -172,7 +230,7 @@ impl<'a> Parser<'a> {
             Ok(tok) => {
                 // 如果是独立标签 /
                 if self.tokenizer.source().content(&tok)[0] == ascii::SLA {
-                    return Ok(Node::DomTag(tag,attrs,children));
+                    return Ok(Node::DomTag(tag, attrs, children));
                 }
             }
             Err(Error::None) => { return Err(Error::None); } //TODO:重新定义错误：标签未结束
@@ -205,7 +263,7 @@ impl<'a> Parser<'a> {
         //            tag.children.remove(index);
         //        }
 
-        return Ok(Node::DomTag(tag,attrs,children));
+        return Ok(Node::DomTag(tag, attrs, children));
     }
     /// 解析表达式的独立主体部分
     fn parse_primary(&mut self) -> Result<ast::Node> {
@@ -544,7 +602,7 @@ impl<'a> Parser<'a> {
                         if vec!['i' as u8, 'f' as u8, ].compare(self.tokenizer.source().content(&tok)) {
                             return self.parse_if();
                         }
-                        println!("zzzzzzzzzzzzzzzzzzzzz");
+                        println!("zzzzzzzzzzzzzzzzzzzzz:{:?}", self.tokenizer.source().content_str(&tok));
                         return self.parse_expression();
                     }
                     _ => {
@@ -562,13 +620,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse(&mut self) -> Result<ast::Node> {
+        println!("parse");
         return self.take().and_then(|tok| -> Result<ast::Node>{
             match tok.kind() {
                 &TokenKind::DomTagStart => {
-                    return self.parse_dom_tag(tok);
+                    return self.parse_dom_tag(tok).and_then(|mut node| -> Result<ast::Node>{
+                        //                        match node {
+                        //
+                        //                            _ => {}
+                        //                        }
+                        return Ok(node);
+                    });
                 }
                 &TokenKind::LDelimiter => {
-                    println!("ffffffffffffff");
                     return self.parse_statement();
                 }
                 &TokenKind::Data => {
@@ -588,14 +652,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_until(&mut self, buf: &mut NodeList) -> NoneResult {
-        // TODO: 设置还原点
+        println!("parse_until");
         self.tokenizer.mark();
         loop {
             match self.check_breakpoint() {
                 //println!("zzzzzzzzzzzzz");
                 Ok(_) => {
                     self.tokenizer.unmark();
-                    return Error::ok();
+                    return self.extend_commands(buf);
                 }
                 Err(Error::EOF) => { break; }
                 Err(Error::None) => {}
@@ -617,6 +681,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_all(&mut self) -> Result<NodeList> {
+        println!("parse_all");
         let mut list = vec![];
         loop {
             match self.parse() {
@@ -626,7 +691,101 @@ impl<'a> Parser<'a> {
                 Err(err) => { return Err(err); }
             }
         }
+        match self.extend_commands(&mut list) {
+            Ok(_) => {}
+            Err(err) => { return Err(err); }
+        };
         return Ok(list);
+    }
+    fn extend_if(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList, condition: Box<Node>, others: &mut NodeList) -> Result<Node> {
+        println!("extend_if");
+        for i in 0..attrs.len() {
+            if self.tokenizer.source().content(&attrs[i].name)[0] != '@' as u8 {
+                continue;
+            }
+            let mut attr = attrs.remove(i);
+            println!("TODO:extends");
+        }
+        let mut branches: NodeList = vec![];
+        /*for i in 0..others.len() {
+            let mut test=0isize;
+            match others[i] {
+                Node::DomTag(_, ref next_attrs, _) => {
+                    for next_attr in next_attrs {
+                        if self.tokenizer.source().content(&next_attr.name)[0] != '@' as u8 {
+                            continue;
+                        }
+                        let len = self.tokenizer.source().content(&attrs[i].name).len();
+                        if vec!['e' as u8, 'l' as u8,'i' as u8, 'f' as u8,].compare(&self.tokenizer.source().content(&attrs[i].name)[1..len]) {
+                            test=1;
+                        }
+                        if vec!['e' as u8, 'l' as u8,'s' as u8, 'e' as u8,].compare(&self.tokenizer.source().content(&attrs[i].name)[1..len]) {
+                            test=2;
+                        }
+                    }
+                 }
+                _ => {test=0; }
+            }
+            if test==0{
+                continue;
+            }
+            let mut next = others.remove(i);
+            //TODO:
+        }*/
+
+        return Ok(Node::If(condition, vec![Node::DomTag(tag, attrs, children)], branches));
+    }
+
+    fn extend_dom(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList, list: &mut NodeList) -> Result<Node> {
+        println!("extend_dom");
+        for i in 0..attrs.len() {
+            if self.tokenizer.source().content(&attrs[i].name)[0] != '@' as u8 {
+                continue;
+            }
+            let len = self.tokenizer.source().content(&attrs[i].name).len();
+            if len <= 1 {
+                return Err(Error::Message("非法1".to_string()));
+            }
+            if vec!['i' as u8, 'f' as u8].compare(&self.tokenizer.source().content(&attrs[i].name)[1..len]) {
+                let mut attr = attrs.remove(i);
+                if attr.value.len() == 0 {
+                    println!("extend_dom:{:?}", attr);
+                    return Err(Error::Message("非法".to_string()));
+                }
+                match attr.value.remove(0) {
+                    Node::Statement(mut body) => {
+                        match body.remove(0) {
+                            Node::If(condition, _, _) => {
+                                return self.extend_if(tag, attrs, children, condition, list);
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+                return Err(Error::Message("非法3".to_string()));
+            }
+        }
+        return Ok(Node::DomTag(tag, attrs, children));
+    }
+
+    fn extend_commands(&mut self, list: &mut NodeList) -> NoneResult {
+        println!("extend_commands");
+        let mut buf: NodeList = vec![];
+        while !list.is_empty() {
+            let mut node = list.remove(0);
+            match node {
+                Node::DomTag(tag, mut attrs, children) => {
+                    match self.extend_dom(tag, attrs, children, list) {
+                        Ok(node) => { buf.push(node); }
+                        Err(err) => { return Err(err); }
+                    }
+                }
+                _ => { buf.push(node); }
+            }
+        }
+        list.append(&mut buf);
+        return Error::ok();
     }
 
     //    pub fn parse_root(&mut self) -> ast::Node {

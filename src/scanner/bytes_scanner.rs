@@ -507,10 +507,11 @@ impl<'a> BytesScanner<'a> {
             // 匹配 =
             if self.ch != ascii::EQS {
                 //如果不匹配则视为独立属性
+                self.tok_buf.offer(Token(TokenKind::DomAttrValue, self.offset - 1, self.offset - 1));
                 self.tok_buf.offer(Token(TokenKind::DomAttrEnd, self.offset - 1, self.offset));
                 continue;
             }
-            self.tok_buf.offer(Token(TokenKind::Symbol, self.offset, self.offset + 1));
+            //self.tok_buf.offer(Token(TokenKind::Symbol, self.offset, self.offset + 1));
             //println!("x=>>>>>>>>>> {:?}", unsafe { from_utf8_unchecked(&self.source[self.offset..self.offset+1]) });
             // 吃掉=和空白
             self.forward();
@@ -524,10 +525,11 @@ impl<'a> BytesScanner<'a> {
                     return Err(self.err(format!("/expected character {}, found {}.", ascii::QUO as char, ch as char), pos));
                 }
                 let Range(start, end) = self.find_to_tok(vec!['}' as u8, '}' as u8]);
-                if start == 0 {
+                if end == 0 {
                     return Err(self.err(format!("语法错误, 代码块未结束, near character {},", ch as char), pos));
                 }
-
+                self.tok_buf.offer(Token(TokenKind::DomAttrValue, start - 2, end + 2));
+                /*
                 //let s = unsafe { from_utf8_unchecked(&self.source[start - 2..end + 2]) };
                 //println!("1=>>>>>>>>>> {}  {}, {:?}", start, end, s);
                 let start = start - 2;
@@ -546,6 +548,7 @@ impl<'a> BytesScanner<'a> {
                     }
                 }
                 //                println!("zzzzzzzzzzzzzzzzz{:?}", self.ch as char);
+                */
                 self.tok_buf.offer(Token(TokenKind::DomAttrEnd, self.offset - 1, self.offset));
             } else {
                 //匹配字符串
@@ -553,9 +556,10 @@ impl<'a> BytesScanner<'a> {
                     return Err(self.err(format!("expected character {}, found {}.", ascii::QUO as char, ch as char), pos));
                 }
                 let Range(start, end) = self.find_str(ascii::QUO);
-                if start == 0 {
+                if end == 0 {
                     return Err(self.err(format!("语法错误, 字符串未结束, near character {},", ch as char), pos));
                 }
+                /*
                 // 处理扩展语法
                 if self.source[attr_start] == ascii::ATS {
                     let mut s = String::from("{{");
@@ -564,15 +568,15 @@ impl<'a> BytesScanner<'a> {
                     let origin = s.len() + start - 2;
                     s += unsafe { from_utf8_unchecked(&self.source[start..end]) };
                     s += "}}";
-                    //println!("2=>>>>>>>>>> {}  {}, {:?}", start, end, s);
+                    println!("2=>>>>>>>>>> {}  {}, {:?}", start, end, s);
                     let mut inner = BytesScanner::new(s.as_bytes(), "inner-ext".as_ref());
                     loop {
                         match inner.scan_next() {
                             Ok(mut tok) => {
-                                //println!("3=>>>>>>>>>> {:?}", tok);
+                                println!("3=>>>>>>>>>> {:?}", tok);
                                 // 映射 pos
-                                tok.1 += origin;
-                                tok.2 += origin;
+//                                tok.1 += origin;
+//                                tok.2 += origin;
                                 self.tok_buf.offer(tok);
                             }
                             Err(Error::None) | Err(Error::EOF) => { break; }
@@ -582,7 +586,8 @@ impl<'a> BytesScanner<'a> {
                     //self.tok_buf.offer(Token(TokenKind::DomAttrEnd, self.offset - 1, self.offset));
                 } else {
                     self.tok_buf.offer(Token(TokenKind::Data, start, end));
-                }
+                }*/
+                self.tok_buf.offer(Token(TokenKind::DomAttrValue, start, end));
 
                 //解析属性值
                 //TODO: 处理扩展语法 &s[..]
@@ -783,6 +788,9 @@ impl<'a> Tokenizer for BytesScanner<'a> {
             self.mark_buf.pop().unwrap();
             //println!("unmark===>{:?}",buf);let buf=
         }
+    }
+    fn new_tokenizer(&self, source: &[u8], filename: &Path) -> Box<Tokenizer> {
+        unimplemented!()
     }
 }
 

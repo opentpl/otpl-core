@@ -7,7 +7,7 @@ use token::Token;
 pub type NodeList = Vec<Node>;
 
 /// 定义的一个语法树的分类抽象节点。
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum Node {
     /// 表示一个用于占位的空节点，它不产生任何副作用。
     Empty,
@@ -37,7 +37,7 @@ pub enum Node {
     Boolean(Token),
     /// 表示一个无符号整数常量。
     Integer(Token),
-    /// 表示一个无符号浮点数常量。
+    /// 表示一个无符号浮点数常量(integer,decimal)。
     Float(Token, Token),
     /// 表示一个`null`常量。
     None(Token),
@@ -50,7 +50,7 @@ pub enum Node {
 }
 
 /// 表示一个 DOM 节点的属性，如： id。
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct DomAttr {
     pub name: Token,
     pub value: NodeList,
