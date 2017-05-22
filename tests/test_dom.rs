@@ -34,30 +34,13 @@ impl Write for StringWriter {
 }
 
 
-struct Compiler<'a>(&'a Source, &'a mut Write, usize);//indent
+struct Compiler<'a>(&'a Source, &'a mut Write, usize,bool);//indent
 impl<'a> Compiler<'a> {
-    fn optimize_literal(value: &[u8]) -> &[u8] {
-        let mut start = 0usize;
-        let mut end = value.len();
-        for i in 0..value.len() {
-            let ch = value[i];
-            if !(ch == ('\r' as u8) || ch == ('\n' as u8) || ch == ('\t' as u8) || ch == (' ' as u8)) {
-                start = i;
-                break;
-            }
+    fn gen_yield(&mut self){
+        if self.3{
+            self.1.write("yield ".as_ref());
         }
-        for i in (0..value.len()).rev() {
-            let ch = value[i];
-            if !(ch == ('\r' as u8) || ch == ('\n' as u8) || ch == ('\t' as u8) || ch == (' ' as u8)) {
-                end = i + 1;
-                break;
-            }
-            end = i;
-        }
-        println!("abc:{} {} {}", start, end, value.len());
-        return &value[start..end];
     }
-
     fn gen_indents(&mut self) {
         let mut s = String::new();
         for i in 0..self.2 * 4 {
@@ -71,35 +54,20 @@ impl<'a> Visitor for Compiler<'a> {
     fn visit_root(&mut self, body: &NodeList) {
         self.1.write("xview.GeneratorToArray((function* () {\n".as_ref());
         self.2 += 1;
+        self.3=true;
         for n in body {
             self.gen_indents();
-            self.1.write("yield ".as_ref());
             self.visit(&n);
             self.1.write("\n".as_ref());
         }
+        self.3=false;
         self.2 -= 1;
         self.1.write("})())".as_ref());
     }
     fn visit_dom_tag(&mut self, name: &Token, attrs: &Vec<ast::DomAttr>, children: &NodeList) {
-        //处理扩展命令
-//        for i in 0..attrs.len() {
-//            let name=self.0.content(&attrs[i].name);
-//            if name[0]!='@' as u8{
-//                continue;
-//            }
-//            let name=&name[1..name.len()];
-//            if vec!['i' as u8, 'f' as u8].compare(name){
-//                let mut new_attrs=vec![];
-//                for attr in attrs {
-//                    new_attrs.push((*attr).clone());
-//                }
-//                new_attrs.remove(i);
-//                self.visit_if()
-//            }
-//        }
-
+        self.gen_yield();
         self.1.write("xview.createElement(xview.getDenined('".as_ref());
-        self.1.write(self.0.content(&name));
+        self.1.write(name.value());
         self.1.write("'),xview.procProperties({".as_ref());
         let mut first = false;
         for attr in attrs {
@@ -109,26 +77,29 @@ impl<'a> Visitor for Compiler<'a> {
                 self.1.write(",".as_ref());
             }
             self.1.write("\"".as_ref());
-            self.1.write(self.0.content(&attr.name));
+            self.1.write(attr.name.value());
             self.1.write("\":".as_ref());
             self.visit_list(&attr.value);
         }
         self.1.write("}),xview.GeneratorToArray((function* () {\n".as_ref());
         self.2 += 1;
+        let prev_yield=self.3;
+        self.3=true;
         for n in children {
             self.gen_indents();
-            self.1.write("yield ".as_ref());
             self.visit(&n);
             self.1.write("\n".as_ref());
         }
+        self.3=prev_yield;
         self.2 -= 1;
         self.gen_indents();
         self.1.write("})()))".as_ref());
     }
 
     fn visit_literal(&mut self, tok: &Token) {
+        self.gen_yield();
         self.1.write("`".as_ref());
-        self.1.write(self.0.content(&tok));
+        self.1.write(tok.value());
         self.1.write("`".as_ref());
     }
     fn visit_ternary(&mut self, expr: &Node, left: &Node, right: &Node) {
@@ -137,17 +108,28 @@ impl<'a> Visitor for Compiler<'a> {
 
     fn visit_binary(&mut self, left: &Node, right: &Node, operator: &Token) {
         self.visit(left);
-        let op=self.0.content(&operator);
-        if vec!['+' as u8,].compare(op){
+        if vec!['+' as u8,].compare(operator.value()){
             self.1.write(" + ".as_ref());
-        } else if vec!['-' as u8,].compare(op){
+        } else if vec!['-' as u8,].compare(operator.value()){
             self.1.write(" * ".as_ref());
-        } else if vec!['*' as u8,].compare(op){
+        } else if vec!['*' as u8,].compare(operator.value()){
             self.1.write(" * ".as_ref());
-        } else if vec!['/' as u8,].compare(op){
+        } else if vec!['/' as u8,].compare(operator.value()){
             self.1.write(" / ".as_ref());
-        } else if vec!['%' as u8,].compare(op){
+        } else if vec!['%' as u8,].compare(operator.value()){
             self.1.write(" % ".as_ref());
+        } else if vec!['<' as u8,].compare(operator.value()){
+            self.1.write(" < ".as_ref());
+        } else if vec!['>' as u8,].compare(operator.value()){
+            self.1.write(" > ".as_ref());
+        } else if vec!['=' as u8,'=' as u8,].compare(operator.value()){
+            self.1.write(" == ".as_ref());
+        } else if vec!['!' as u8,'=' as u8,].compare(operator.value()){
+            self.1.write(" != ".as_ref());
+        } else if vec!['<' as u8,'=' as u8,].compare(operator.value()){
+            self.1.write(" <= ".as_ref());
+        } else if vec!['>' as u8,'=' as u8,].compare(operator.value()){
+            self.1.write(" >= ".as_ref());
         }
         self.visit(right);
     }
@@ -173,7 +155,7 @@ impl<'a> Visitor for Compiler<'a> {
     }
 
     fn visit_integer(&mut self, tok: &Token) {
-        self.1.write(self.0.content(&tok));
+        self.1.write(tok.value());
     }
 
     fn visit_float(&mut self, integer: &Token, decimal: &Token) {
@@ -185,14 +167,18 @@ impl<'a> Visitor for Compiler<'a> {
     }
 
     fn visit_identifier(&mut self, tok: &Token) {
-        self.1.write(self.0.content(&tok));
+        self.1.write("context.get('".as_ref());
+        self.1.write(tok.value());
+        self.1.write("')".as_ref());
     }
 
     fn visit_if(&mut self, condition: &Node, body: &NodeList, branches: &NodeList) {
         self.1.write("if (".as_ref());
         self.visit(condition);
-        self.1.write(") {".as_ref());
+        self.1.write(") {\n".as_ref());
+        self.2 += 1;
         self.visit_list(body);
+        self.2 -= 1;
         self.1.write("}".as_ref());
         self.visit_list(branches);
     }
@@ -218,7 +204,7 @@ fn test_pure_dom() {
     {
         let mut writer = StringWriter::new();
         {
-            let mut visitor = Compiler(&scanner, &mut writer, 0);
+            let mut visitor = Compiler(&scanner, &mut writer, 0,false);
             let root = Node::Root(root.expect("Failed to parse"));
             visitor.visit(&root);
             println!("Visit Done! ==============================");
@@ -245,7 +231,7 @@ fn test_extend_if() {
     {
         let mut writer = StringWriter::new();
         {
-            let mut visitor = Compiler(&scanner, &mut writer, 0);
+            let mut visitor = Compiler(&scanner, &mut writer, 0,false);
             let root = Node::Root(root);
             visitor.visit(&root);
             println!("Visit Done! ==============================");

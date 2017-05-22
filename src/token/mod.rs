@@ -1,5 +1,5 @@
 pub mod ascii;
-
+use std::str::from_utf8_unchecked;
 /// 标记的种类
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TokenKind {
@@ -42,11 +42,20 @@ pub enum TokenKind {
 /// 定义的源码中最小词法的含义。
 /// Token([`TokenKind`], start-offset, end-offset)
 #[derive(Debug, Clone)]
-pub struct Token(pub TokenKind, pub usize, pub usize);
+pub struct Token(pub TokenKind, pub usize, pub Vec<u8>);
 
 impl Token {
     pub fn kind(&self) -> &TokenKind {
         &self.0
+    }
+
+    pub fn value(&self) -> &[u8]{
+        self.2.as_slice()
+    }
+
+    pub fn value_str(&self) -> &str {
+        let s = self.value();
+        return unsafe { from_utf8_unchecked(s) };
     }
 }
 
@@ -54,8 +63,4 @@ impl PartialEq<Token> for Token {
     fn eq(&self, other: &Token) -> bool {
         self.0 == other.0 && self.1 == other.1 && self.2 == other.2
     }
-}
-
-enum NewToken{
-    Dom(Vec<u8>,usize)
 }

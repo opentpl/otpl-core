@@ -57,9 +57,8 @@ impl<'a> Parser<'a> {
     fn skip_symbol(&mut self, symbols: Vec<Vec<u8>>) -> Result<Token> {
         return self.take().and_then(|tok| -> Result<Token>{
             if &TokenKind::Symbol == tok.kind() {
-                let val = self.tokenizer.source().content(&tok);
                 for symbol in &symbols {
-                    if symbol.compare(val) { return Ok(tok); }
+                    if symbol.compare(tok.value()) { return Ok(tok); }
                 }
             }
             self.back(tok);
@@ -107,11 +106,10 @@ impl<'a> Parser<'a> {
 
     fn expect_value(&mut self, value: Vec<u8>) -> NoneResult {
         return self.take().and_then(|tok| -> NoneResult{
-            let content = self.tokenizer.source().content(&tok);
-            if value.compare(content) {
+            if value.compare(tok.value()) {
                 return Error::ok();
             }
-            return Err(Error::Message(format!("expected value {:?}, found {:?}. {:?}", value, content, tok)));
+            return Err(Error::Message(format!("expected value {:?}, found {:?}", value, tok)));
         }).map_err(|err| -> Error{
             match err {
                 Error::None => {
@@ -134,8 +132,8 @@ impl<'a> Parser<'a> {
                 //let is_extend=self.tokenizer.source().content(&tok)[0]=='@' as u8;
                 let mut node = ast::DomAttr::new(tok.clone());
                 return self.expect_type(TokenKind::DomAttrValue).and_then(|attr_val| -> NoneResult{
-                    let val = self.tokenizer.source().content(&attr_val);
-                    let name = self.tokenizer.source().content(&tok);
+                    let val = attr_val.value();
+                    let name = tok.value();
                     let pos = attr_val.1;
                     let mut value: Result<NodeList>;
                     if name[0] == '@' as u8 {
@@ -151,22 +149,6 @@ impl<'a> Parser<'a> {
                         s += "}}";
                         println!("2=>>>>>>>>>> {:?}", s);
                         let mut inner = BytesScanner::new(s.as_bytes(), "inner-ext".as_ref());
-                        let mut buf = vec![];
-                        loop {
-                            match inner.scan() {
-                                Ok(mut tok) => {
-                                    tok.1 = pos + tok.1;
-                                    tok.1 = pos + tok.2;
-                                    buf.push(tok);
-                                }
-                                Err(Error::EOF) => { break; }
-                                Err(err) => { return Err(err); }
-                            }
-                        }
-                        println!("4=>>>>>>>>>> {:?} {:?}", pos, buf);
-                        for tok in buf {
-                            Tokenizer::back(&mut inner, tok);
-                        }
                         let mut parser = Parser::new(&mut inner);
                         value = parser.parse_all();
                     } else {
@@ -229,14 +211,14 @@ impl<'a> Parser<'a> {
         match self.expect_type(TokenKind::DomTagEnd) {
             Ok(tok) => {
                 // 如果是独立标签 /
-                if self.tokenizer.source().content(&tok)[0] == ascii::SLA {
+                if tok.2[0] == ascii::SLA {
                     return Ok(Node::DomTag(tag, attrs, children));
                 }
             }
             Err(Error::None) => { return Err(Error::None); } //TODO:重新定义错误：标签未结束
             Err(err) => { return Err(err); }
         }
-        let name = self.tokenizer.source().content_vec(&tag);
+        let name =tag.2.clone();
         //println!("bbbbbbbbbb:{:?}", String::from_utf8(name.clone()).unwrap());
         //todo: 考虑，没有按标准(如：html标准dom)来的情况
         self.set_breakpoint(BreakPoint::build(vec![
@@ -271,14 +253,13 @@ impl<'a> Parser<'a> {
         return self.take().and_then(|tok| -> Result<ast::Node>{
             match tok.kind() {
                 &TokenKind::Identifier => {
-                    let val = self.tokenizer.source().content(&tok);
                     //false|true
-                    if vec!['f' as u8, 'a' as u8, 'l' as u8, 's' as u8, 'e' as u8, ].compare(val)
-                        || vec!['t' as u8, 'r' as u8, 'u' as u8, 'e' as u8, ].compare(val) {
+                    if vec!['f' as u8, 'a' as u8, 'l' as u8, 's' as u8, 'e' as u8, ].compare(tok.value())
+                        || vec!['t' as u8, 'r' as u8, 'u' as u8, 'e' as u8, ].compare(tok.value()) {
                         return Ok(Node::Boolean(tok));
                     }
                     //null
-                    if vec!['n' as u8, 'u' as u8, 'l' as u8, 'l' as u8].compare(val) {
+                    if vec!['n' as u8, 'u' as u8, 'l' as u8, 'l' as u8].compare(tok.value()) {
                         return Ok(Node::None(tok));
                     }
                     println!("Identifier:bbbbbbbbbbbbbbbbb");
@@ -294,7 +275,7 @@ impl<'a> Parser<'a> {
                         Err(err) => { return Err(err); }
                     };
                 }
-                &TokenKind::Symbol if vec!['(' as u8].compare(self.tokenizer.source().content(&tok)) => {
+                &TokenKind::Symbol if vec!['(' as u8].compare(tok.value()) => {
                     match self.parse_group(vec![')' as u8]) {
                         Ok(list) => { return Ok(Node::List(list)); }
                         Err(err) => { return Err(err); }
@@ -321,21 +302,21 @@ impl<'a> Parser<'a> {
         loop {
             match self.skip_symbol(symbols.clone()) {
                 Ok(operator) => {
-                    if symbols[0].compare(self.tokenizer.source().content(&operator)) {
+                    if symbols[0].compare(operator.value()) {
                         match self.expect_type(TokenKind::Identifier) {
                             Ok(tok) => {
                                 node = Node::Property(Box::new(node), vec![Node::String(tok)], operator);
                             }
                             Err(err) => { return Err(err); }
                         }
-                    } else if symbols[1].compare(self.tokenizer.source().content(&operator)) {
+                    } else if symbols[1].compare(operator.value()) {
                         match self.parse_group(vec![']' as u8]) {
                             Ok(list) => {
                                 node = Node::Property(Box::new(node), list, operator);
                             }
                             Err(err) => { return Err(err); }
                         }
-                    } else if symbols[2].compare(self.tokenizer.source().content(&operator)) {
+                    } else if symbols[2].compare(operator.value()) {
                         match self.parse_group(vec![')' as u8]) {
                             Ok(list) => {
                                 node = Node::Method(Box::new(node), list, operator);
@@ -496,8 +477,7 @@ impl<'a> Parser<'a> {
             }
             match self.skip_symbol(vec![end.clone(), vec![',' as u8]]) {
                 Ok(tok) => {
-                    let val = self.tokenizer.source().content(&tok);
-                    if end.compare(val) {
+                    if end.compare(tok.value()) {
                         return Ok(list);
                     }
                 }
@@ -560,12 +540,12 @@ impl<'a> Parser<'a> {
             }).ok_or(Error::None).and_then(|tok| -> Result<ast::Node> {
                 //elif
                 if vec!['e' as u8, 'l' as u8, 'i' as u8, 'f' as u8, ]
-                    .compare(self.tokenizer.source().content(&tok)) {
+                    .compare(tok.value()) {
                     return self.parse_if();
                 }
                 //else
                 if vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ]
-                    .compare(self.tokenizer.source().content(&tok)) {
+                    .compare(tok.value()) {
                     return self.parse_else(vec!['i' as u8, 'f' as u8, ]);
                 }
                 self.back(tok);
@@ -599,10 +579,10 @@ impl<'a> Parser<'a> {
                     &TokenKind::Identifier => {
                         println!("yyyyyyyyyyyyyyyyyyyy");
                         //if
-                        if vec!['i' as u8, 'f' as u8, ].compare(self.tokenizer.source().content(&tok)) {
+                        if vec!['i' as u8, 'f' as u8, ].compare(tok.value()) {
                             return self.parse_if();
                         }
-                        println!("zzzzzzzzzzzzzzzzzzzzz:{:?}", self.tokenizer.source().content_str(&tok));
+                        println!("zzzzzzzzzzzzzzzzzzzzz:{:?}", tok.value_str());
                         return self.parse_expression();
                     }
                     _ => {
@@ -636,11 +616,11 @@ impl<'a> Parser<'a> {
                     return self.parse_statement();
                 }
                 &TokenKind::Data => {
-                    let (start, end) = optimize_literal(self.tokenizer.source().content(&tok));
-                    if end == 0 {
-                        return Ok(Node::Empty);
-                    }
-                    let tok = Token(TokenKind::Data, tok.1 + start, tok.1 + end);
+//                    let (start, end) = optimize_literal(self.tokenizer.source().content(&tok));
+//                    if end == 0 {
+//                        return Ok(Node::Empty);
+//                    }
+//                    let tok = Token(TokenKind::Data, tok.1 + start, tok.1 + end);
                     return Ok(Node::Literal(tok));
                 }
                 _ => {
@@ -700,7 +680,7 @@ impl<'a> Parser<'a> {
     fn extend_if(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList, condition: Box<Node>, others: &mut NodeList) -> Result<Node> {
         println!("extend_if");
         for i in 0..attrs.len() {
-            if self.tokenizer.source().content(&attrs[i].name)[0] != '@' as u8 {
+            if attrs[i].name.2[0] != '@' as u8 {
                 continue;
             }
             let mut attr = attrs.remove(i);
@@ -739,14 +719,14 @@ impl<'a> Parser<'a> {
     fn extend_dom(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList, list: &mut NodeList) -> Result<Node> {
         println!("extend_dom");
         for i in 0..attrs.len() {
-            if self.tokenizer.source().content(&attrs[i].name)[0] != '@' as u8 {
+            if attrs[i].name.2[0] != '@' as u8 {
                 continue;
             }
-            let len = self.tokenizer.source().content(&attrs[i].name).len();
+            let len = attrs[i].name.2.len();
             if len <= 1 {
                 return Err(Error::Message("非法1".to_string()));
             }
-            if vec!['i' as u8, 'f' as u8].compare(&self.tokenizer.source().content(&attrs[i].name)[1..len]) {
+            if vec!['i' as u8, 'f' as u8].compare(&attrs[i].name.value()[1..len]) {
                 let mut attr = attrs.remove(i);
                 if attr.value.len() == 0 {
                     println!("extend_dom:{:?}", attr);

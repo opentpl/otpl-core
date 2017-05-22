@@ -18,19 +18,6 @@ pub trait Source: Debug {
     fn filename(&self) -> &Path;
     /// 获取源
     fn body(&self) -> &[u8];
-
-    /// 获取给定 `Token` 的内容.
-    fn content(&self, tok: &Token) -> &[u8];
-    fn content_str(&self, tok: &Token) -> &str {
-        let s = self.content(tok);
-        return unsafe { from_utf8_unchecked(s) };
-    }
-    fn content_vec(&self, tok: &Token) -> Vec<u8> {
-        let s = self.content(tok);
-        let mut arr: Vec<u8> = Vec::new();
-        arr.extend_from_slice(s);
-        return arr;
-    }
 }
 
 pub trait Tokenizer: Debug {

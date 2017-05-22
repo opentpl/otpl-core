@@ -31,10 +31,10 @@ impl BreakPoint {
 
                 for value in &point.values {
                     match parser.take().and_then(|tok| -> NoneResult{
-                        println!("BreakPoint:{:?}", parser.tokenizer.source().content_str(&tok));
-                        if &point.kind == tok.kind() && value.compare(parser.tokenizer.source().content(&tok)) {
+                        //println!("BreakPoint:{:?}", parser.tokenizer.source().content_str(&tok));
+                        if &point.kind == tok.kind() && value.compare(tok.value()) {
                             //println!("bbbbbbbbbb{:?}", 2);
-                        } else if point.kind == TokenKind::Ignore && value.compare(parser.tokenizer.source().content(&tok)) {
+                        } else if point.kind == TokenKind::Ignore && value.compare(tok.value()) {
                             //println!("bbbbbbbbbb{:?}", 2);
                         } else {
                             buf.push(tok);
