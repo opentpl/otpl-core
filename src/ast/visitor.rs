@@ -21,7 +21,7 @@ pub trait Visitor {
             &Node::Float(ref integer,ref decimal) => self.visit_float(integer,decimal),
             &Node::None(ref inner) => self.visit_none(inner),
             &Node::Identifier(ref inner) => self.visit_identifier(inner),
-            &Node::If(ref condition,ref body,ref branches) => self.visit_if(condition,body,branches),
+            &Node::If(ref condition,ref body,ref branches,ref is_else_if) => self.visit_if(condition,body,branches,is_else_if),
             &Node::Else(ref body) => self.visit_else(body),
             _ => self.visit_undefined(node)
         }
@@ -60,7 +60,7 @@ pub trait Visitor {
     fn visit_float(&mut self, integer: &Token, decimal: &Token);
     fn visit_none(&mut self, tok: &Token);
     fn visit_identifier(&mut self, tok: &Token);
-    fn visit_if(&mut self, condition: &Node,body: &NodeList,branches: &NodeList);
+    fn visit_if(&mut self, condition: &Node,body: &NodeList,branches: &NodeList,is_else_if:&bool);
     fn visit_else(&mut self,body: &NodeList){
         self.visit_list(body);
     }

@@ -759,7 +759,7 @@ impl<'a> Source for BytesScanner<'a> {
 
 
 impl<'a> Tokenizer for BytesScanner<'a> {
-    fn back(&mut self, tok: Token) {
+    fn back_token(&mut self, tok: Token) {
         let len = self.mark_buf.len();
         for i in 0..len {
             //self.mark_buf[i].remove_item(&tok);
@@ -806,7 +806,7 @@ impl<'a> Tokenizer for BytesScanner<'a> {
             let mut buf = self.mark_buf.pop().unwrap();
             //println!("reset===>{:?}",buf);
             while !buf.is_empty() {
-                Tokenizer::back(self, buf.pop().unwrap());
+                Tokenizer::back_token(self, buf.pop().unwrap());
             }
         }
     }

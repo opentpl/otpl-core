@@ -1,1 +1,8 @@
-<div @if="i==0">ok</div>
+<div @if="i==0">if</div>
+<div @elif="i==1">else if</div>
+<div @else>
+    else
+    <div @if="i==0">nesting if</div>
+    <div @elif="i==1">nesting else if</div>
+    <div @else> nesting else</div>
+</div>

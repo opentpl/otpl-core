@@ -43,8 +43,8 @@ pub enum Node {
     None(Token),
     /// 表示一个标示符，如：变量名。
     Identifier(Token),
-    /// if/else-if条件表达式(condition, body, branch-blocks)
-    If(Box<Node>, NodeList, NodeList),
+    /// if/else-if条件表达式(condition, body, branch-blocks,is-else-if)
+    If(Box<Node>, NodeList, NodeList,bool),
     /// else表达式(body)
     Else(NodeList),
 }
