@@ -137,8 +137,7 @@ impl<'a> Parser<'a> {
                     let mut value: Result<NodeList>;
                     if name[0] == '@' as u8 {
                         let mut name = &name[1..name.len()];
-                        if vec!['i' as u8, 'f' as u8, ].compare(name) {}
-                        else if vec!['e' as u8, 'l' as u8, 'i' as u8, 'f' as u8, ].compare(name) {
+                        if vec!['i' as u8, 'f' as u8, ].compare(name) {} else if vec!['f' as u8, 'o' as u8, 'r' as u8, ].compare(name) {} else if vec!['e' as u8, 'l' as u8, 'i' as u8, 'f' as u8, ].compare(name) {
                             name = &name[2..name.len()];
                         } else if vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ].compare(name) {
                             // else 不解析值
@@ -514,7 +513,7 @@ impl<'a> Parser<'a> {
         self.pop_breakpoint();
         return Ok(Node::Else(body));
     }
-    fn parse_if(&mut self,is_else_if:bool) -> Result<ast::Node> {
+    fn parse_if(&mut self, is_else_if: bool) -> Result<ast::Node> {
         println!("parse_if");
         let condition = self.parse_expression();
         if condition.is_err() { return condition; }
@@ -571,8 +570,89 @@ impl<'a> Parser<'a> {
         match self.expect_type(TokenKind::LDelimiter)
             .and_then(|_| -> NoneResult{ self.expect_value(vec!['/' as u8]) })
             .and_then(|_| -> NoneResult{ self.expect_value(vec!['i' as u8, 'f' as u8, ]) }) {
-            Ok(_) => { return Ok(Node::If(Box::new(condition.unwrap()), body, items,is_else_if)); }
+            Ok(_) => { return Ok(Node::If(Box::new(condition.unwrap()), body, items, is_else_if)); }
             Err(Error::None) => { return Err(Error::Message("if 命令未结束：必须以/if结束".to_string())); }
+            Err(err) => { return Err(err); }
+        }
+    }
+
+    fn parse_for(&mut self) -> Result<ast::Node> {
+        let mut key: Token;
+        match self.expect_type(TokenKind::Identifier) {
+            Ok(tok) => {
+                key = tok;
+            }
+            Err(err) => {
+                return Err(err);
+            }
+        }
+        let mut value = Token::empty();
+        match self.skip_symbol(vec![vec![',' as u8]]).and_then(|_| -> Result<Token>{
+            self.expect_type(TokenKind::Identifier)
+        }) {
+            Ok(tok) => {
+                value = tok;
+            }
+            Err(Error::None) => {}
+            Err(err) => {
+                return Err(err);
+            }
+        }
+
+        match self.expect_value(vec![':' as u8]) {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(err);
+            }
+        }
+        let mut expr: Node;
+        match self.parse_expression() {
+            Ok(node) => {
+                expr = node;
+            }
+            Err(err) => {
+                return Err(err);
+            }
+        }
+
+        self.set_breakpoint(BreakPoint::build(vec![
+            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['{' as u8, '{' as u8, ], vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ]]),
+            BreakPoint::new(true, TokenKind::Ignore, vec![vec!['{' as u8, '{' as u8, ], vec!['/' as u8], vec!['f' as u8, 'o' as u8, 'r' as u8, ]]),
+        ]));
+        let mut body = vec![];
+        match self.parse_until(&mut body) {
+            Ok(_) => {}
+            Err(Error::None) => { return Err(Error::Message("for 命令未结束：必须至少包含 else 或 /for其中之一".to_string())); }
+            Err(err) => { return Err(err); }
+        }
+        self.pop_breakpoint();
+        let mut for_else = Node::Empty;
+        match self.skip_type(TokenKind::LDelimiter).and_then(|tok| -> Option<Token>{
+            return self.skip_type(TokenKind::Identifier).or_else(|| -> Option<Token>{
+                self.back(tok);
+                return None;
+            });
+        }).ok_or(Error::None).and_then(|tok| -> Result<ast::Node> {
+            //else
+            if vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ]
+                .compare(tok.value()) {
+                return self.parse_else(vec!['f' as u8, 'o' as u8, 'r' as u8, ]);
+            }
+            self.back(tok);
+            return Err(Error::None);
+        }) {
+            Ok(node) => {
+                for_else = node;
+            }
+            Err(Error::None) => {}
+            err => { return err; }
+        }
+
+        match self.expect_type(TokenKind::LDelimiter)
+            .and_then(|_| -> NoneResult{ self.expect_value(vec!['/' as u8]) })
+            .and_then(|_| -> NoneResult{ self.expect_value(vec!['f' as u8, 'o' as u8, 'r' as u8, ]) }) {
+            Ok(_) => { return Ok(Node::For(key, value, Box::new(expr), body, Box::new(for_else))); }
+            Err(Error::None) => { return Err(Error::Message("for 命令未结束：必须以/for结束".to_string())); }
             Err(err) => { return Err(err); }
         }
     }
@@ -590,6 +670,9 @@ impl<'a> Parser<'a> {
                         //if
                         if vec!['i' as u8, 'f' as u8, ].compare(tok.value()) {
                             return self.parse_if(false);
+                        }
+                        if vec!['f' as u8, 'o' as u8, 'r' as u8, ].compare(tok.value()) {
+                            return self.parse_for();
                         }
                         println!("zzzzzzzzzzzzzzzzzzzzz:{:?}", tok.value_str());
                         return self.parse_expression();
@@ -686,13 +769,13 @@ impl<'a> Parser<'a> {
         };
         return Ok(list);
     }
-    fn extend_if(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>
-                 , children: NodeList, condition: Box<Node>
-                 , others: &mut NodeList,is_else_if:bool) -> Result<Node> {
+    fn extend_if(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList
+                 , condition: Box<Node>
+                 , others: &mut NodeList, is_else_if: bool) -> Result<Node> {
         println!("extend_if");
         let mut branches: NodeList = vec![];
         while !others.is_empty() {
-            let i=0;
+            let i = 0;
             let mut test = 0isize;
             match others[i] {
                 Node::DomTag(_, ref next_attrs, _) => {
@@ -718,7 +801,7 @@ impl<'a> Parser<'a> {
             if test == 1 {
                 match next {
                     Node::DomTag(tag, mut attrs, children) => {
-                        match self.extend_dom(tag, attrs, children, others,true) {
+                        match self.extend_dom(tag, attrs, children, others, true) {
                             Ok(node) => { branches.push(node); }
                             Err(err) => { return Err(err); }
                         }
@@ -746,11 +829,64 @@ impl<'a> Parser<'a> {
             }
         }
 
-        return Ok(Node::If(condition, vec![Node::DomTag(tag, attrs, children)], branches,is_else_if));
+        return Ok(Node::If(condition, vec![Node::DomTag(tag, attrs, children)], branches, is_else_if));
+    }
+
+    fn extend_for(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList
+                  , key: Token, value: Token, iter: Box<Node>
+                  , others: &mut NodeList) -> Result<Node> {
+        println!("extend_for");
+        let mut for_else = Node::Empty;
+        let mut size = others.len();
+        while size > 0 && !others.is_empty() {
+            size -= 1;
+            let i = 0;
+            let mut test = 0isize;
+            match others[i] {
+                Node::DomTag(_, ref next_attrs, _) => {
+                    for next_attr in next_attrs {
+                        if next_attr.name.2[0] != '@' as u8 {
+                            continue;
+                        }
+                        let len = next_attr.name.2.len();
+                        if vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ].compare(&next_attr.name.value()[1..len]) {
+                            test = 2;
+                        }
+                    }
+                }
+                _ => { test = 0; }
+            }
+            if test == 0 {
+                continue;
+            }
+            let mut next = others.remove(i);
+            if test == 2 {
+                match next {
+                    Node::DomTag(tag, mut attrs, children) => {
+                        // TODO: 扩展指令
+                        while !attrs.is_empty() {
+                            if attrs[0].name.2[0] != '@' as u8 {
+                                continue;
+                            }
+                            let len = attrs[0].name.2.len();
+                            if vec!['e' as u8, 'l' as u8, 's' as u8, 'e' as u8, ].compare(&attrs[0].name.value()[1..len]) {
+                                attrs.remove(0);
+                            }
+                        }
+                        for_else = Node::Else(vec![Node::DomTag(tag, attrs, children)]);
+                        break;
+                    }
+                    _ => {}
+                }
+                break;
+            }
+        }
+
+        return Ok(Node::For(key, value, iter, vec![Node::DomTag(tag, attrs, children)], Box::new(for_else)));
     }
 
     fn extend_dom(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList
-                  , list: &mut NodeList,is_else_if:bool) -> Result<Node> {
+                  , list: &mut NodeList, is_else_if: bool) -> Result<Node> {
         println!("extend_dom");
         for i in 0..attrs.len() {
             if attrs[i].name.2[0] != '@' as u8 {
@@ -761,9 +897,8 @@ impl<'a> Parser<'a> {
                 return Err(Error::Message("非法1".to_string()));
             }
             if vec!['i' as u8, 'f' as u8].compare(&attrs[i].name.value()[1..len])
-                || vec!['e' as u8, 'l' as u8,'i' as u8, 'f' as u8].compare(&attrs[i].name.value()[1..len]) {
-
-                if is_else_if && vec!['i' as u8, 'f' as u8].compare(&attrs[i].name.value()[1..len]){
+                || vec!['e' as u8, 'l' as u8, 'i' as u8, 'f' as u8].compare(&attrs[i].name.value()[1..len]) {
+                if is_else_if && vec!['i' as u8, 'f' as u8].compare(&attrs[i].name.value()[1..len]) {
                     return Err(Error::Message("错误的if扩展指令表达式".to_string()));
                 }
 
@@ -775,21 +910,43 @@ impl<'a> Parser<'a> {
 
                 match attr.value.remove(0) {
                     Node::Statement(mut body) => {
-                        if body.is_empty(){
-                            return Err(Error::Message(format!("if/elif扩展指令必须包含表达式{:?}",attr)));
+                        if body.is_empty() {
+                            return Err(Error::Message(format!("if/elif扩展指令必须包含表达式{:?}", attr)));
                         }
                         match body.remove(0) {
-                            Node::If(condition, _, _,_) => {
-                                return self.extend_if(tag, attrs, children, condition, list,is_else_if);
+                            Node::If(condition, _, _, _) => {
+                                return self.extend_if(tag, attrs, children, condition, list, is_else_if);
                             }
-                            _ => {return Err(Error::Message("if扩展指令必须是条件表达式".to_string()));}
+                            _ => { return Err(Error::Message("if扩展指令必须是条件表达式".to_string())); }
+                        }
+                    }
+                    _ => {}
+                }
+                return Err(Error::Message("非法3".to_string()));
+            } else if vec!['f' as u8, 'o' as u8, 'r' as u8].compare(&attrs[i].name.value()[1..len]) {
+                let mut attr = attrs.remove(i);
+                if attr.value.len() == 0 {
+                    println!("extend_dom:{:?}", attr);
+                    return Err(Error::Message("非法".to_string()));
+                }
+
+                match attr.value.remove(0) {
+                    Node::Statement(mut body) => {
+                        if body.is_empty() {
+                            return Err(Error::Message(format!("if/elif扩展指令必须包含表达式{:?}", attr)));
+                        }
+                        match body.remove(0) {
+                            Node::For(key, value, iter, _, _) => {
+                                return self.extend_for(tag, attrs, children, key, value, iter, list);
+                            }
+                            _ => { return Err(Error::Message("if扩展指令必须是条件表达式".to_string())); }
                         }
                     }
                     _ => {}
                 }
                 return Err(Error::Message("非法3".to_string()));
             } else {
-                return Err(Error::Message(format!("扩展指令不支持:{:?}",attrs[i].name.value_str())));
+                return Err(Error::Message(format!("扩展指令不支持:{:?}", attrs[i].name.value_str())));
             }
         }
         return Ok(Node::DomTag(tag, attrs, children));
@@ -802,7 +959,7 @@ impl<'a> Parser<'a> {
             let mut node = list.remove(0);
             match node {
                 Node::DomTag(tag, mut attrs, children) => {
-                    match self.extend_dom(tag, attrs, children, list,false) {
+                    match self.extend_dom(tag, attrs, children, list, false) {
                         Ok(node) => { buf.push(node); }
                         Err(err) => { return Err(err); }
                     }

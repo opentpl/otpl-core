@@ -6,7 +6,7 @@ pub use self::otpl::scanner::{BytesScanner, Source};
 pub use self::otpl::ast;
 pub use self::otpl::ast::{Visitor, Node, NodeList};
 pub use self::otpl::token;
-pub use self::otpl::token::Token;
+pub use self::otpl::token::{Token,TokenKind};
 use std::fs::OpenOptions;
 use std::path::{Path};
 use std::io;
@@ -214,5 +214,28 @@ impl<'a> Visitor for Compiler<'a> {
         self.2 -= 1;
         self.gen_indents();
         self.1.write("}".as_ref());
+    }
+    fn visit_for(&mut self, key: &Token, value: &Token, iter: &Node, body: &NodeList, for_else: &Node) {
+        //TODO: 临时随机变量
+        self.1.write("for (let ".as_ref());
+        if let &TokenKind::Ignore=value.kind(){
+            self.1.write(key.value());
+            self.1.write(" of context.toArray(".as_ref());
+            self.visit(iter);
+        }else {
+            self.1.write("[".as_ref());
+            self.1.write(key.value());
+            self.1.write(", ".as_ref());
+            self.1.write(value.value());
+            self.1.write("] of context.toMap(".as_ref());
+            self.visit(iter);
+        }
+        self.1.write(") {\n".as_ref());
+        self.2 += 1;
+        self.visit_list_format(body);
+        self.2 -= 1;
+        self.gen_indents();
+        self.1.write("}".as_ref());
+        //TODO: else
     }
 }

@@ -57,6 +57,10 @@ impl Token {
         let s = self.value();
         return unsafe { from_utf8_unchecked(s) };
     }
+
+    pub fn empty()->Token{
+        Token(TokenKind::Ignore,0,vec![])
+    }
 }
 
 impl PartialEq<Token> for Token {
