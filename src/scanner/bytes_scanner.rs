@@ -289,8 +289,8 @@ impl<'a> BytesScanner<'a> {
                 }
                 return Err(self.err(format!("expected string , but not found end character {}", ch as char), start));
             }
-            //扫描重叠符号 ++ -- || == ?? &&
-            ascii::PLS | ascii::SUB | ascii::VER | ascii::EQS | ascii::QUM | ascii::AMP
+            //扫描重叠符号 ++ -- || == ?? && !!
+            ascii::PLS | ascii::SUB | ascii::VER | ascii::EQS | ascii::QUM | ascii::AMP| ascii::NOT
             if self.match_forward(ch) => {
                 self.forward();
                 self.forward();
@@ -314,10 +314,10 @@ impl<'a> BytesScanner<'a> {
                 self.forward();
                 return Ok(self.new_token(TokenKind::Symbol, self.offset - 2, self.offset));
             }
-            //扫描单符合 + - * / % = : ,  . | ( ) [ ] < > !
+            //扫描单符合 + - * / % = : ,  . | ( ) [ ] < > ! #
             ascii::PLS | ascii::SUB | ascii::MUL | ascii::SLA| ascii::REM | ascii::EQS | ascii::COLON
             | ascii::COMMA | ascii::DOT | ascii::VER | ascii::LPA | ascii::RPA | ascii::LSQ | ascii::RSQ
-            | ascii::LSS | ascii::GTR | ascii::NOT => {
+            | ascii::LSS | ascii::GTR | ascii::NOT| ascii::SHS => {
                 self.forward();
                 return Ok(self.new_token(TokenKind::Symbol, self.offset - 1, self.offset));
             }
@@ -332,7 +332,7 @@ impl<'a> BytesScanner<'a> {
                 }
             }
             // 扫描标识 a-zA-Z
-            97 ... 122 | 65 ... 90 => {
+            97 ... 122 | 65 ... 90| ascii::UND => {
                 let pos = self.offset;
                 while self.forward() {
                     let ch = self.ch;

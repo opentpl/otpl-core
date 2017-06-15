@@ -33,6 +33,37 @@ fn optimize_literal(value: &[u8]) -> (usize, usize) {
     return (start, end);
 }
 
+fn get_operator(operator: Token) -> ast::Operator {
+    if vec!['+' as u8, ].compare(operator.value()) {
+        return ast::Operator::Add;
+    } else if vec!['-' as u8, ].compare(operator.value()) {
+        return ast::Operator::Sub;
+    } else if vec!['*' as u8, ].compare(operator.value()) {
+        return ast::Operator::Mul;
+    } else if vec!['/' as u8, ].compare(operator.value()) {
+        return ast::Operator::Div;
+    } else if vec!['%' as u8, ].compare(operator.value()) {
+        return ast::Operator::Mod;
+    } else if vec!['<' as u8, ].compare(operator.value()) {
+        return ast::Operator::Lt;
+    } else if vec!['>' as u8, ].compare(operator.value()) {
+        return ast::Operator::Gt;
+    } else if vec!['=' as u8, '=' as u8, ].compare(operator.value()) {
+        return ast::Operator::Eq;
+    } else if vec!['!' as u8, '=' as u8, ].compare(operator.value()) {
+        return ast::Operator::NotEq;
+    } else if vec!['<' as u8, '=' as u8, ].compare(operator.value()) {
+        return ast::Operator::Lte;
+    } else if vec!['>' as u8, '=' as u8, ].compare(operator.value()) {
+        return ast::Operator::Gte;
+    } else if vec!['&' as u8, '&' as u8, ].compare(operator.value()) {
+        return ast::Operator::And;
+    } else if vec!['|' as u8, '|' as u8, ].compare(operator.value()) {
+        return ast::Operator::Or;
+    }
+    panic!("undefined operator: {:?}", operator);
+}
+
 pub struct Parser<'a> {
     tokenizer: &'a mut Tokenizer,
     break_checkers: Vec<Box<(FnMut(&mut Parser) -> NoneResult)>>,
@@ -119,6 +150,7 @@ impl<'a> Parser<'a> {
             }
         });
     }
+
 
     /// 解析DOM标签属性
     fn parse_dom_attr(&mut self) -> Result<ast::DomAttr> {
@@ -261,24 +293,35 @@ impl<'a> Parser<'a> {
         return self.take().and_then(|tok| -> Result<ast::Node>{
             match tok.kind() {
                 &TokenKind::Identifier => {
-                    //false|true
-                    if vec!['f' as u8, 'a' as u8, 'l' as u8, 's' as u8, 'e' as u8, ].compare(tok.value())
-                        || vec!['t' as u8, 'r' as u8, 'u' as u8, 'e' as u8, ].compare(tok.value()) {
-                        return Ok(Node::Boolean(tok));
+                    //false
+                    if vec!['f' as u8, 'a' as u8, 'l' as u8, 's' as u8, 'e' as u8].compare(tok.value()) {
+                        return Ok(Node::Const(ast::Constant::False));
+                    }
+                    //true
+                    if vec!['t' as u8, 'r' as u8, 'u' as u8, 'e' as u8].compare(tok.value()) {
+                        return Ok(Node::Const(ast::Constant::True));
                     }
                     //null
                     if vec!['n' as u8, 'u' as u8, 'l' as u8, 'l' as u8].compare(tok.value()) {
-                        return Ok(Node::None(tok));
+                        return Ok(Node::Const(ast::Constant::None));
+                    }
+                    //break
+                    if vec!['b' as u8, 'r' as u8, 'e' as u8, 'a' as u8, 'k' as u8].compare(tok.value()) {
+                        return Ok(Node::Const(ast::Constant::Break));
+                    }
+                    //continue
+                    if vec!['c' as u8, 'o' as u8, 'n' as u8, 't' as u8, 'i' as u8, 'n' as u8, 'u' as u8, 'e' as u8].compare(tok.value()) {
+                        return Ok(Node::Const(ast::Constant::Continue));
                     }
                     println!("Identifier:bbbbbbbbbbbbbbbbb");
                     return Ok(Node::Identifier(tok));
                 }
                 &TokenKind::Int => {
                     return match self.skip_symbol(vec![vec!['.' as u8]]).and_then(|_| -> Result<Token> { self.expect_type(TokenKind::Int) }) {
-                        Ok(precision) => { return Ok(Node::Float(tok, precision)); }
+                        Ok(precision) => { return Ok(Node::Const(ast::Constant::Float(tok, precision))); }
                         Err(Error::None) => {
                             println!("Identifier:int");
-                            return Ok(Node::Integer(tok));
+                            return Ok(Node::Const(ast::Constant::Integer(tok)));
                         }
                         Err(err) => { return Err(err); }
                     };
@@ -313,7 +356,7 @@ impl<'a> Parser<'a> {
                     if symbols[0].compare(operator.value()) {
                         match self.expect_type(TokenKind::Identifier) {
                             Ok(tok) => {
-                                node = Node::Property(Box::new(node), vec![Node::String(tok)], operator);
+                                node = Node::Property(Box::new(node), vec![Node::Const(ast::Constant::String(tok))], operator);
                             }
                             Err(err) => { return Err(err); }
                         }
@@ -347,7 +390,7 @@ impl<'a> Parser<'a> {
                 //TODO: - = neg, + = pos
                 let node = self.parse_member_access();
                 if node.is_err() { return node; }
-                return Ok(Node::Unary(Box::new(node.unwrap()), operator));
+                return Ok(Node::Unary(Box::new(node.unwrap()), get_operator(operator)));
             }
             Err(Error::None) => {}
             Err(err) => {
@@ -368,7 +411,7 @@ impl<'a> Parser<'a> {
                 Ok(operator) => {
                     let right = self.parse_unary();
                     if right.is_err() { return right; }
-                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), get_operator(operator));
                 }
                 Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
@@ -387,7 +430,7 @@ impl<'a> Parser<'a> {
                 Ok(operator) => {
                     let right = self.parse_binary_mdm();
                     if right.is_err() { return right; }
-                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), get_operator(operator));
                 }
                 Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
@@ -411,7 +454,7 @@ impl<'a> Parser<'a> {
                 Ok(operator) => {
                     let right = self.parse_binary_as();
                     if right.is_err() { return right; }
-                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), get_operator(operator));
                 }
                 Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
@@ -430,7 +473,7 @@ impl<'a> Parser<'a> {
                 Ok(operator) => {
                     let right = self.parse_compare();
                     if right.is_err() { return right; }
-                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), operator);
+                    node = Node::Binary(Box::new(node), Box::new(right.unwrap()), get_operator(operator));
                 }
                 Err(Error::None) => { break; }
                 Err(err) => { return Err(err); }
@@ -657,6 +700,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_print(&mut self, escape: bool) -> Result<ast::Node> {
+        println!("parse_print");
+        let mut body: Node;
+        match self.parse_expression() {
+            Ok(node) => {
+                body = node;
+            }
+            err => { return err; }
+        }
+        return Ok(Node::Print(Box::new(body), escape));
+    }
+
     /// 解析代码段
     fn parse_statement(&mut self) -> Result<ast::Node> {
         println!("parse_statement");
@@ -674,8 +729,14 @@ impl<'a> Parser<'a> {
                         if vec!['f' as u8, 'o' as u8, 'r' as u8, ].compare(tok.value()) {
                             return self.parse_for();
                         }
-                        println!("zzzzzzzzzzzzzzzzzzzzz:{:?}", tok.value_str());
-                        return self.parse_expression();
+                        self.back(tok);
+                        return self.parse_print(true);
+                    }
+                    &TokenKind::Symbol => {
+                        if vec!['!' as u8, '!' as u8, ].compare(tok.value()) {
+                            return self.parse_print(false);
+                        }
+                        return Err(Error::Message(format!("parse_statement: unexpected symbol {:?}", tok)));
                     }
                     _ => {
                         return Err(Error::Message(format!("parse_statement: unexpected token {:?}", tok)));
@@ -774,7 +835,9 @@ impl<'a> Parser<'a> {
                  , others: &mut NodeList, is_else_if: bool) -> Result<Node> {
         println!("extend_if");
         let mut branches: NodeList = vec![];
-        while !others.is_empty() {
+        let mut size = others.len();
+        while size > 0 && !others.is_empty() {
+            size -= 1;
             let i = 0;
             let mut test = 0isize;
             match others[i] {
@@ -828,8 +891,13 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-
-        return Ok(Node::If(condition, vec![Node::DomTag(tag, attrs, children)], branches, is_else_if));
+        let mut body = vec![Node::DomTag(tag, attrs, children)];
+        match self.extend_commands(&mut body) {
+            Ok(_) => {
+                return Ok(Node::If(condition, body, branches, is_else_if));
+            }
+            Err(err) => { return Err(err); }
+        }
     }
 
     fn extend_for(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList
@@ -881,8 +949,13 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-
-        return Ok(Node::For(key, value, iter, vec![Node::DomTag(tag, attrs, children)], Box::new(for_else)));
+        let mut body = vec![Node::DomTag(tag, attrs, children)];
+        match self.extend_commands(&mut body) {
+            Ok(_) => {
+                return Ok(Node::For(key, value, iter, body, Box::new(for_else)));
+            }
+            Err(err) => { return Err(err); }
+        }
     }
 
     fn extend_dom(&mut self, tag: Token, mut attrs: Vec<ast::DomAttr>, children: NodeList

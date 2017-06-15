@@ -1,11 +1,14 @@
-use super::{Node, NodeList, DomAttr};
+use super::{Node, NodeList, DomAttr,Operator,Constant};
 use token::Token;
+use {Error, Result};
+
+pub type VisitResult = Result<()>;
 
 /// 定义一个用于访问AST节点的一组方法。
 pub trait Visitor {
     /// 访问分类抽象节点。
-    fn visit(&mut self, node: &Node) {
-        match node {
+    fn visit(&mut self, node: &Node) -> VisitResult {
+        return match node {
             &Node::Root(ref inner) => self.visit_root(inner),
             &Node::Literal(ref inner) => self.visit_literal(inner),
             &Node::DomTag(ref name, ref attrs, ref children) => self.visit_dom_tag(name, attrs, children),
@@ -15,55 +18,62 @@ pub trait Visitor {
             &Node::Unary(ref body, ref operator) => self.visit_unary(body, operator),
             &Node::Property(ref obj, ref params, ref operator) => self.visit_property(obj, params, operator),
             &Node::Method(ref obj, ref params, ref operator) => self.visit_method(obj, params, operator),
-            &Node::String(ref inner) => self.visit_string(inner),
-            &Node::Boolean(ref inner) => self.visit_boolean(inner),
-            &Node::Integer(ref inner) => self.visit_integer(inner),
-            &Node::Float(ref integer, ref decimal) => self.visit_float(integer, decimal),
-            &Node::None(ref inner) => self.visit_none(inner),
+            &Node::Const(ref inner) => self.visit_const(inner),
+//            &Node::Boolean(ref inner) => self.visit_boolean(inner),
+//            &Node::Integer(ref inner) => self.visit_integer(inner),
+//            &Node::Float(ref integer, ref decimal) => self.visit_float(integer, decimal),
+//            &Node::None(ref inner) => self.visit_none(inner),
             &Node::Identifier(ref inner) => self.visit_identifier(inner),
             &Node::If(ref condition, ref body, ref branches, ref is_else_if) => self.visit_if(condition, body, branches, is_else_if),
             &Node::Else(ref body) => self.visit_else(body),
             &Node::For(ref key, ref val, ref iter, ref body, ref for_else) => self.visit_for(key, val, iter, body, for_else),
+            &Node::Print(ref body, ref escape) => self.visit_print(body, escape),
             _ => self.visit_undefined(node)
         }
     }
     /// 访问未在本访问器定义的 Node。
     #[allow(unused_variables)]
-    fn visit_undefined(&mut self, node: &Node) {
+    fn visit_undefined(&mut self, node: &Node) -> VisitResult {
         match node {
             &Node::Empty => {}
             _ => println!("warning: undefined visit node {:?}", node)
         }
+        return Ok(());
     }
-    fn visit_root(&mut self, body: &NodeList) {
-        self.visit_list(body);
+    fn visit_root(&mut self, body: &NodeList) -> VisitResult {
+        self.visit_list(body)
     }
-    fn visit_list(&mut self, list: &NodeList) {
+    fn visit_list(&mut self, list: &NodeList) -> VisitResult {
         for n in list {
-            self.visit(&n);
+            match self.visit(&n) {
+                Ok(_) | Err(Error::None) => {}
+                err @ _ => { return err; }
+            };
         }
+        return Ok(());
     }
     /// 访问字面量
-    fn visit_literal(&mut self, tok: &Token);
+    fn visit_literal(&mut self, tok: &Token) -> VisitResult;
     /// 访问 DomTag
-    fn visit_dom_tag(&mut self, name: &Token, attrs: &Vec<DomAttr>, children: &NodeList);
-    fn visit_statement(&mut self, body: &NodeList) {
-        self.visit_list(body);
+    fn visit_dom_tag(&mut self, name: &Token, attrs: &Vec<DomAttr>, children: &NodeList) -> VisitResult;
+    fn visit_statement(&mut self, body: &NodeList) -> VisitResult {
+        self.visit_list(body)
     }
-    fn visit_ternary(&mut self, expr: &Node, left: &Node, right: &Node);
-    fn visit_binary(&mut self, left: &Node, right: &Node, operator: &Token);
-    fn visit_unary(&mut self, body: &Node, operator: &Token);
-    fn visit_property(&mut self, obj: &Node, params: &NodeList, operator: &Token);
-    fn visit_method(&mut self, obj: &Node, params: &NodeList, operator: &Token);
-    fn visit_string(&mut self, tok: &Token);
-    fn visit_boolean(&mut self, tok: &Token);
-    fn visit_integer(&mut self, tok: &Token);
-    fn visit_float(&mut self, integer: &Token, decimal: &Token);
-    fn visit_none(&mut self, tok: &Token);
-    fn visit_identifier(&mut self, tok: &Token);
-    fn visit_if(&mut self, condition: &Node, body: &NodeList, branches: &NodeList, is_else_if: &bool);
-    fn visit_else(&mut self, body: &NodeList) {
-        self.visit_list(body);
+    fn visit_ternary(&mut self, expr: &Node, left: &Node, right: &Node) -> VisitResult;
+    fn visit_binary(&mut self, left: &Node, right: &Node, operator: &Operator) -> VisitResult;
+    fn visit_unary(&mut self, body: &Node, operator: &Operator) -> VisitResult;
+    fn visit_property(&mut self, obj: &Node, params: &NodeList, operator: &Token) -> VisitResult;
+    fn visit_method(&mut self, obj: &Node, params: &NodeList, operator: &Token) -> VisitResult;
+    fn visit_const(&mut self, tok: &Constant) -> VisitResult;
+//    fn visit_boolean(&mut self, tok: &Token) -> VisitResult;
+//    fn visit_integer(&mut self, tok: &Token) -> VisitResult;
+//    fn visit_float(&mut self, integer: &Token, decimal: &Token) -> VisitResult;
+//    fn visit_none(&mut self, tok: &Token) -> VisitResult;
+    fn visit_identifier(&mut self, tok: &Token) -> VisitResult;
+    fn visit_if(&mut self, condition: &Node, body: &NodeList, branches: &NodeList, is_else_if: &bool) -> VisitResult;
+    fn visit_else(&mut self, body: &NodeList) -> VisitResult {
+        self.visit_list(body)
     }
-    fn visit_for(&mut self, key: &Token, value: &Token, iter: &Node, body: &NodeList, for_else: &Node);
+    fn visit_for(&mut self, key: &Token, value: &Token, iter: &Node, body: &NodeList, for_else: &Node) -> VisitResult;
+    fn visit_print(&mut self, body: &Node, escape: &bool) -> VisitResult;
 }

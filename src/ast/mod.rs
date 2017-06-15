@@ -24,23 +24,13 @@ pub enum Node {
     /// 三目表达式(express,left,right)
     Ternary(Box<Node>, Box<Node>, Box<Node>),
     /// 二元表达式(left,right,operator)
-    Binary(Box<Node>, Box<Node>, Token),
+    Binary(Box<Node>, Box<Node>, Operator),
     /// 一元表达式(body,operator）
-    Unary(Box<Node>, Token),
+    Unary(Box<Node>, Operator),
     /// 访问成员属性(object, parameters, operator)
     Property(Box<Node>, NodeList, Token),
     /// 访问成员方法(object, parameters, operator)
     Method(Box<Node>, NodeList, Token),
-    /// 表示一个字符串。
-    String(Token),
-    /// 表示一个布尔常量，`true`或`false`。
-    Boolean(Token),
-    /// 表示一个无符号整数常量。
-    Integer(Token),
-    /// 表示一个无符号浮点数常量(integer,decimal)。
-    Float(Token, Token),
-    /// 表示一个`null`常量。
-    None(Token),
     /// 表示一个标示符，如：变量名。
     Identifier(Token),
     /// if/else-if条件表达式(condition, body, branch-blocks,is-else-if)
@@ -49,6 +39,9 @@ pub enum Node {
     Else(NodeList),
     /// for表达式(key-name, value-name, iter, body,else)
     For(Token, Token, Box<Node>, NodeList, Box<Node>),
+    Print(Box<Node>, bool),
+    /// 表示一个常量
+    Const(Constant),
 }
 
 /// 表示一个 DOM 节点的属性，如： id。
@@ -65,4 +58,54 @@ impl DomAttr {
             value: vec![],
         };
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum Constant {
+    Break,
+    Continue,
+    None,
+    True,
+    False,
+    /// 表示一个字符串。
+    String(Token),
+    /// 表示一个无符号整数常量。
+    Integer(Token),
+    /// 表示一个无符号浮点数常量(integer,decimal)。
+    Float(Token, Token),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Operator {
+    /// + or +x
+    Add,
+    /// - or -x
+    Sub,
+    /// *
+    Mul,
+    /// /
+    Div,
+    /// %
+    Mod,
+    /// >
+    Gt,
+    /// >=
+    Gte,
+    /// <
+    Lt,
+    /// <=
+    Lte,
+    /// ==
+    Eq,
+    /// !=
+    NotEq,
+    /// &&
+    And,
+    /// ||
+    Or,
+    /// ??
+    NullCond,
+    /// ?
+    TestCond,
+
 }

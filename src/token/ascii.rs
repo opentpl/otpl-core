@@ -13,6 +13,8 @@ pub const SP: u8 = 32;
 pub const NOT: u8 = 33;
 /// 双引号 "
 pub const QUO: u8 = 34;
+/// 井号 #
+pub const SHS: u8 = 35;
 /// 美元符 $
 pub const DLS: u8 = 36;
 /// 百分号 %
