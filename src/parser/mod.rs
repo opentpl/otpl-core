@@ -60,8 +60,18 @@ fn get_operator(operator: Token) -> ast::Operator {
         return ast::Operator::And;
     } else if vec!['|' as u8, '|' as u8, ].compare(operator.value()) {
         return ast::Operator::Or;
+    } else if vec!['?' as u8, '?' as u8, ].compare(operator.value()) {
+        return ast::Operator::NullCond;
     }
     panic!("undefined operator: {:?}", operator);
+}
+
+fn err(dev_prefix: &str, msg: String, offs: usize) -> Error {
+    Error::Parse(format!("{}:{}", dev_prefix, msg), offs)
+}
+
+fn vec_str(value: &Vec<u8>) -> &str {
+    unsafe { from_utf8_unchecked(value.as_slice()) }
 }
 
 pub struct Parser<'a> {
@@ -129,7 +139,7 @@ impl<'a> Parser<'a> {
             if tok.kind() == &kind {
                 return Ok(tok);
             }
-            return Err(Error::Message(format!("expected type {:?}, found {:?}", kind, tok)));
+            return Err(err("expect_type", format!("expected type {:?}, found {:?}", kind, tok.kind()), tok.offset()));
         });
 
         // return Err(Error::Message(format!("expected type {:?}, but EOF.", kind)));
@@ -140,13 +150,14 @@ impl<'a> Parser<'a> {
             if value.compare(tok.value()) {
                 return Error::ok();
             }
-            return Err(Error::Message(format!("expected value {:?}, found {:?}", value, tok)));
-        }).map_err(|err| -> Error{
-            match err {
+            return Err(err("expect_value", format!("expected value {:?}, found {:?}", vec_str(&value), tok.value_str()), tok.offset()));
+        }).map_err(|e| -> Error{
+            match e {
                 Error::None => {
-                    return Error::Message(format!("expect_value: 代码未结束 {:?}", err))
+                    //TODO: 具体错误原因
+                    return err("expect_value", format!("expected value {:?}, but EOF?", vec_str(&value)), 0);
                 }
-                _ => { return err; }
+                _ => { return e; }
             }
         });
     }
@@ -176,7 +187,7 @@ impl<'a> Parser<'a> {
                             println!("else不解析值");
                             return Error::ok();
                         } else {
-                            return Err(Error::Message(format!("不支持的扩展指令：{:?}", tok)));
+                            return Err(err("parse_dom_attr", format!("Unsupported extends command: {:?}", unsafe { from_utf8_unchecked(name) }), tok.offset()));
                         }
                         let start = name.len() + 3;
                         let mut s = String::from("{{");
@@ -206,17 +217,24 @@ impl<'a> Parser<'a> {
                         }
                         value = Parser::new(&mut inner).parse_all();
                     } else {
-                        let mut inner = BytesScanner::new(val, "inner-ext".as_ref());
+                        let mut inner = BytesScanner::new(val, "inner-attr".as_ref());
+                        let mut buf = vec![];
+                        loop {
+                            match inner.scan() {
+                                Ok(mut tok) => {
+                                    tok.1 += pos - 1;
+                                    buf.push(tok);
+                                }
+                                Err(Error::EOF) => { break; }
+                                Err(err) => { return Err(err); }
+                            }
+                        }
+                        while !buf.is_empty() {
+                            inner.back_token(buf.pop().unwrap());
+                        }
                         value = Parser::new(&mut inner).parse_all();
-                        //                        match parser.parse_all(){
-                        //                            Ok(mut list) => {
-                        //                                node.value.append(&mut list);
-                        //                            }
-                        //                            //TODO: 重写错误定位
-                        //                            Err(err) => { return Err(err); }
-                        //                        }
                     }
-                    println!("999999999999999999999:{:?}", value);
+                    //println!("999999999999999999999:{:?}", value);
                     match value {
                         Ok(mut list) => {
                             node.value.append(&mut list);
@@ -332,14 +350,17 @@ impl<'a> Parser<'a> {
                         Err(err) => { return Err(err); }
                     }
                 }
-                _ => { return Err(Error::Message(format!("parse_primary: unexpected token {:?}", tok))); }
-            }
-        }).map_err(|err| -> Error{
-            match err {
-                Error::None => {
-                    return Error::Message(format!("parse_primary: 代码未结束 {:?}", err))
+                _ => {
+                    return Err(err("parse_primary", format!("unexpected token: {:?}", tok.value_str()), tok.offset()));
                 }
-                _ => { return err; }
+            }
+        }).map_err(|e| -> Error{
+            match e {
+                Error::None => {
+                    //TODO: 具体错误原因
+                    return err("parse_primary", format!("expected token, but EOF?"), 0);
+                }
+                _ => { return e; }
             }
         });
     }
@@ -523,7 +544,9 @@ impl<'a> Parser<'a> {
                 Ok(node) => {
                     list.push(node);
                 }
-                Err(Error::None) => { return Err(Error::Message("expected 表达式".to_string())); }
+                Err(Error::None) => {
+                    return Err(err("parse_group", format!("expected expression"), 0));
+                }
                 Err(err) => { return Err(err); }
             }
             match self.skip_symbol(vec![end.clone(), vec![',' as u8]]) {
@@ -532,7 +555,9 @@ impl<'a> Parser<'a> {
                         return Ok(list);
                     }
                 }
-                Err(Error::None) => { return Err(Error::Message("expected '".to_string())); }
+                Err(Error::None) => {
+                    return Err(err("parse_group", format!("expected symbol \",\""), 0));
+                }
                 Err(err) => { return Err(err); }
             }
         }
@@ -550,7 +575,9 @@ impl<'a> Parser<'a> {
         let mut body = vec![];
         match self.parse_until(&mut body) {
             Ok(_) => {}
-            Err(Error::None) => { return Err(Error::Message("XX 命令未结束：语法/xx".to_string())); }
+            Err(Error::None) => {
+                return Err(err("parse_else", format!("TODO:XX 命令未结束：语法/xx"), 0));
+            }
             Err(err) => { return Err(err); }
         }
         self.pop_breakpoint();
@@ -577,7 +604,9 @@ impl<'a> Parser<'a> {
         let mut body = vec![];
         match self.parse_until(&mut body) {
             Ok(_) => {}
-            Err(Error::None) => { return Err(Error::Message("if 命令未结束：必须至少包含 elif 或 else 或 /if其中之一".to_string())); }
+            Err(Error::None) => {
+                return Err(err("parse_if", format!("TODO:if 命令未结束：必须至少包含 elif 或 else 或 /if其中之一"), 0));
+            }
             Err(err) => { return Err(err); }
         }
         self.pop_breakpoint();
@@ -614,7 +643,9 @@ impl<'a> Parser<'a> {
             .and_then(|_| -> NoneResult{ self.expect_value(vec!['/' as u8]) })
             .and_then(|_| -> NoneResult{ self.expect_value(vec!['i' as u8, 'f' as u8, ]) }) {
             Ok(_) => { return Ok(Node::If(Box::new(condition.unwrap()), body, items, is_else_if)); }
-            Err(Error::None) => { return Err(Error::Message("if 命令未结束：必须以/if结束".to_string())); }
+            Err(Error::None) => {
+                return Err(err("parse_if", format!("TODO:if 命令未结束：必须以/if结束"), 0));
+            }
             Err(err) => { return Err(err); }
         }
     }
@@ -665,7 +696,9 @@ impl<'a> Parser<'a> {
         let mut body = vec![];
         match self.parse_until(&mut body) {
             Ok(_) => {}
-            Err(Error::None) => { return Err(Error::Message("for 命令未结束：必须至少包含 else 或 /for其中之一".to_string())); }
+            Err(Error::None) => {
+                return Err(err("parse_for", format!("TODO:for 命令未结束：必须至少包含 else 或 /for其中之一"), 0));
+            }
             Err(err) => { return Err(err); }
         }
         self.pop_breakpoint();
@@ -695,7 +728,9 @@ impl<'a> Parser<'a> {
             .and_then(|_| -> NoneResult{ self.expect_value(vec!['/' as u8]) })
             .and_then(|_| -> NoneResult{ self.expect_value(vec!['f' as u8, 'o' as u8, 'r' as u8, ]) }) {
             Ok(_) => { return Ok(Node::For(key, value, Box::new(expr), body, Box::new(for_else))); }
-            Err(Error::None) => { return Err(Error::Message("for 命令未结束：必须以/for结束".to_string())); }
+            Err(Error::None) => {
+                return Err(err("parse_for", format!("TODO:for 命令未结束：必须以/for结束"), 0));
+            }
             Err(err) => { return Err(err); }
         }
     }
@@ -736,10 +771,10 @@ impl<'a> Parser<'a> {
                         if vec!['!' as u8, '!' as u8, ].compare(tok.value()) {
                             return self.parse_print(false);
                         }
-                        return Err(Error::Message(format!("parse_statement: unexpected symbol {:?}", tok)));
+                        return Err(err("parse_statement", format!("unexpected symbol {}", tok.value_str()), tok.offset()));
                     }
                     _ => {
-                        return Err(Error::Message(format!("parse_statement: unexpected token {:?}", tok)));
+                        return Err(err("parse_statement", format!("unexpected token {}", tok.value_str()), tok.offset()));
                     }
                 };
             }) {

@@ -1,5 +1,7 @@
 pub mod ascii;
+
 use std::str::from_utf8_unchecked;
+
 /// 标记的种类
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TokenKind {
@@ -49,7 +51,11 @@ impl Token {
         &self.0
     }
 
-    pub fn value(&self) -> &[u8]{
+    pub fn offset(&self) -> usize {
+        self.1
+    }
+
+    pub fn value(&self) -> &[u8] {
         self.2.as_slice()
     }
 
@@ -58,8 +64,8 @@ impl Token {
         return unsafe { from_utf8_unchecked(s) };
     }
 
-    pub fn empty()->Token{
-        Token(TokenKind::Ignore,0,vec![])
+    pub fn empty() -> Token {
+        Token(TokenKind::Ignore, 0, vec![])
     }
 }
 

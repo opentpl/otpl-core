@@ -1,4 +1,3 @@
-
 pub trait VecSliceCompare<T: PartialEq> {
     fn compare(&self, s: &[T]) -> bool;
 }
@@ -38,7 +37,7 @@ pub trait BinarySearch<T: Sized> {
 
 impl<T: Sized> BinarySearch<T> for Vec<T> {
     fn binary_search(&self, accept: Box<Fn(&T) -> isize>) -> Option<usize> {
-        if self.is_empty(){
+        if self.is_empty() {
             return None;
         }
         let mut low = 0usize;
@@ -48,7 +47,7 @@ impl<T: Sized> BinarySearch<T> for Vec<T> {
             let r = accept(&self[mid]);
             if r == 0 {
                 return Some(mid);
-            } else if r > 0 {
+            } else if r > 0 {// && mid != 0
                 high = mid - 1;
             } else {
                 low = mid + 1;
@@ -57,3 +56,20 @@ impl<T: Sized> BinarySearch<T> for Vec<T> {
         return None;
     }
 }
+
+
+#[test]
+fn test_binary_search() {
+    let arr = vec![1, 3, 5, 9, 10];
+    let rst = arr.binary_search(Box::new(move |i| -> isize{
+        let offset = 10;
+        if offset < *i {
+            return 1;
+        } else if offset > *i {
+            return -1;
+        }
+        return 0;
+    }));
+    assert_eq!(rst, Some(4));
+}
+
