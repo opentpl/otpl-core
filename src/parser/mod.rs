@@ -62,6 +62,10 @@ fn get_operator(operator: Token) -> ast::Operator {
         return ast::Operator::Or;
     } else if vec!['?' as u8, '?' as u8, ].compare(operator.value()) {
         return ast::Operator::NullCond;
+    }else if vec!['&' as u8, ].compare(operator.value()) {
+        return ast::Operator::TestCond;
+    }else if vec!['!' as u8, ].compare(operator.value()) {
+        return ast::Operator::Not;
     }
     panic!("undefined operator: {:?}", operator);
 }
@@ -325,11 +329,11 @@ impl<'a> Parser<'a> {
                     }
                     //break
                     if vec!['b' as u8, 'r' as u8, 'e' as u8, 'a' as u8, 'k' as u8].compare(tok.value()) {
-                        return Ok(Node::Const(ast::Constant::Break));
+                        return Ok(Node::Const(ast::Constant::Break(tok)));
                     }
                     //continue
                     if vec!['c' as u8, 'o' as u8, 'n' as u8, 't' as u8, 'i' as u8, 'n' as u8, 'u' as u8, 'e' as u8].compare(tok.value()) {
-                        return Ok(Node::Const(ast::Constant::Continue));
+                        return Ok(Node::Const(ast::Constant::Continue(tok)));
                     }
                     println!("Identifier:bbbbbbbbbbbbbbbbb");
                     return Ok(Node::Identifier(tok));
@@ -349,6 +353,9 @@ impl<'a> Parser<'a> {
                         Ok(list) => { return Ok(Node::List(list)); }
                         Err(err) => { return Err(err); }
                     }
+                }
+                &TokenKind::String=> {
+                    return Ok(Node::Const(ast::Constant::String(tok)));
                 }
                 _ => {
                     return Err(err("parse_primary", format!("unexpected token: {:?}", tok.value_str()), tok.offset()));
@@ -406,7 +413,7 @@ impl<'a> Parser<'a> {
     /// 解析一元运算
     fn parse_unary(&mut self) -> Result<ast::Node> {
         println!("parse_unary");
-        match self.skip_symbol(vec![vec!['-' as u8], vec!['+' as u8]]) {
+        match self.skip_symbol(vec![vec!['-' as u8], vec!['+' as u8], vec!['!' as u8]]) {
             Ok(operator) => {
                 //TODO: - = neg, + = pos
                 let node = self.parse_member_access();
@@ -490,7 +497,7 @@ impl<'a> Parser<'a> {
         if node.is_err() { return node; }
         let mut node = node.unwrap();
         loop {
-            match self.skip_symbol(vec![vec!['?' as u8, '?' as u8], vec!['|' as u8, '|' as u8], vec!['&' as u8, '&' as u8]]) {
+            match self.skip_symbol(vec![vec!['?' as u8, '?' as u8], vec!['|' as u8, '|' as u8], vec!['&' as u8, '&' as u8], vec!['&' as u8]]) {
                 Ok(operator) => {
                     let right = self.parse_compare();
                     if right.is_err() { return right; }
@@ -535,8 +542,9 @@ impl<'a> Parser<'a> {
     fn parse_group(&mut self, end: Vec<u8>) -> Result<NodeList> {
         println!("parse_group");
         let mut list = vec![];
-        match self.skip_symbol(vec![end]) {
+        match self.skip_symbol(vec![end.clone()]) {
             Ok(_) => { return Ok(list); }
+            Err(Error::None)=>{}
             Err(err) => { return Err(err); }
         }
         loop {
@@ -714,6 +722,7 @@ impl<'a> Parser<'a> {
                 .compare(tok.value()) {
                 return self.parse_else(vec!['f' as u8, 'o' as u8, 'r' as u8, ]);
             }
+
             self.back(tok);
             return Err(Error::None);
         }) {
@@ -771,10 +780,24 @@ impl<'a> Parser<'a> {
                         if vec!['!' as u8, '!' as u8, ].compare(tok.value()) {
                             return self.parse_print(false);
                         }
+                        if vec!['[' as u8 ].compare(tok.value()) {
+                            match self.parse_group(vec![']' as u8]) {
+                                Ok(list)=>{
+                                    //panic!("xxxxxxxxxxxxxxxxxxxxxxxxx parse_statement, array: {:?}", list);
+                                    return Ok(Node::Array(list));
+                                }
+                                Err(err) => {
+                                    //panic!("xxxxxxxxxxxxxxxxxxxxxxxxx parse_statement, err: {:?}", err);
+                                    return Err(err);
+                                }
+                            };
+                        }
                         return Err(err("parse_statement", format!("unexpected symbol {}", tok.value_str()), tok.offset()));
                     }
                     _ => {
-                        return Err(err("parse_statement", format!("unexpected token {}", tok.value_str()), tok.offset()));
+                        self.back(tok);
+                        return self.parse_print(false);
+                        //return Err(err("parse_statement", format!("unexpected token type {:?} , {}", tok.kind(), tok.value_str()), tok.offset()));
                     }
                 };
             }) {

@@ -322,10 +322,10 @@ impl<'a> BytesScanner<'a> {
                 self.forward();
                 return Ok(self.new_token(TokenKind::Symbol, self.offset - 2, self.offset));
             }
-            //扫描单符合 + - * / % = : ,  . | ( ) [ ] < > ! #
+            //扫描单符合 + - * / % = : ,  . | ( ) [ ] < > ! # &
             ascii::PLS | ascii::SUB | ascii::MUL | ascii::SLA | ascii::REM | ascii::EQS | ascii::COLON
             | ascii::COMMA | ascii::DOT | ascii::VER | ascii::LPA | ascii::RPA | ascii::LSQ | ascii::RSQ
-            | ascii::LSS | ascii::GTR | ascii::NOT | ascii::SHS => {
+            | ascii::LSS | ascii::GTR | ascii::NOT | ascii::SHS| ascii::AMP => {
                 self.forward();
                 return Ok(self.new_token(TokenKind::Symbol, self.offset - 1, self.offset));
             }
@@ -352,7 +352,7 @@ impl<'a> BytesScanner<'a> {
             }
             _ => {}
         }
-        return Err(err("scan_stmt", format!("unexpected  character {:?}.1", ch as char), self.offset));
+        return Err(err("scan_stmt", format!("unexpected  character {:?}", ch as char), self.offset));
     }
 
     /// 扫描字面含义输出段
@@ -412,14 +412,14 @@ impl<'a> BytesScanner<'a> {
     }
 
     /// 提取dom标签或属性名称
-    fn find_dom_name(&mut self, allow_at_prefix: bool, allow_underline: bool) -> Range {
+    fn find_dom_name(&mut self, allow_at_prefix: bool, allow_colon_prefix: bool) -> Range {
         let none = Range(0, 0);
         let ch = self.ch;
         // 检查首字母
         if !(is_lower_letter(ch)
             || is_upper_letter(ch)
-            || (allow_at_prefix && ch == ascii::ATS)) {
-            //println!("bbbbbbbbbbbbbbb{:?}", ch as char);
+            || (allow_at_prefix && ch == ascii::ATS)
+            || (allow_colon_prefix && ch == ascii::COLON)) {
             return none;
         }
 
@@ -434,12 +434,14 @@ impl<'a> BytesScanner<'a> {
                 break;
             }
             //println!("{:?}", ch as char);
-            //允许字母数字+下划线
+            //允许字母数字+下划线+点+冒号
             if !(is_lower_letter(ch)
                 || is_upper_letter(ch)
                 || is_digit(ch)
                 || ch == ascii::SUB
-                || (allow_underline && ch == ascii::UND)) {
+                || ch == ascii::DOT
+                || ch == ascii::COLON
+                || ch == ascii::UND) {
                 self.back_pos_diff(pos);
                 return none;
             }

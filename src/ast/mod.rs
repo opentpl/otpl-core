@@ -42,6 +42,10 @@ pub enum Node {
     Print(Box<Node>, bool),
     /// 表示一个常量
     Const(Constant),
+    /// 表示一个数组。
+    Array(NodeList),
+    MapEntry(Box<Node>, Box<Node>),
+    Map(NodeList),
 }
 
 /// 表示一个 DOM 节点的属性，如： id。
@@ -60,10 +64,11 @@ impl DomAttr {
     }
 }
 
+
 #[derive(Debug, Clone)]
 pub enum Constant {
-    Break,
-    Continue,
+    Break(Token),
+    Continue(Token),
     None,
     True,
     False,
@@ -107,5 +112,7 @@ pub enum Operator {
     NullCond,
     /// ?
     TestCond,
+    /// !
+    Not,
 
 }

@@ -19,15 +19,14 @@ pub trait Visitor {
             &Node::Property(ref obj, ref params, ref operator) => self.visit_property(obj, params, operator),
             &Node::Method(ref obj, ref params, ref operator) => self.visit_method(obj, params, operator),
             &Node::Const(ref inner) => self.visit_const(inner),
-//            &Node::Boolean(ref inner) => self.visit_boolean(inner),
-//            &Node::Integer(ref inner) => self.visit_integer(inner),
-//            &Node::Float(ref integer, ref decimal) => self.visit_float(integer, decimal),
-//            &Node::None(ref inner) => self.visit_none(inner),
             &Node::Identifier(ref inner) => self.visit_identifier(inner),
             &Node::If(ref condition, ref body, ref branches, ref is_else_if) => self.visit_if(condition, body, branches, is_else_if),
             &Node::Else(ref body) => self.visit_else(body),
             &Node::For(ref key, ref val, ref iter, ref body, ref for_else) => self.visit_for(key, val, iter, body, for_else),
             &Node::Print(ref body, ref escape) => self.visit_print(body, escape),
+            &Node::Array(ref inner) => self.visit_array(inner),
+            &Node::Map(ref inner) => self.visit_map(inner),
+            &Node::MapEntry(ref key,ref val) => self.visit_map_entry(key,val),
             _ => self.visit_undefined(node)
         }
     }
@@ -65,10 +64,6 @@ pub trait Visitor {
     fn visit_property(&mut self, obj: &Node, params: &NodeList, operator: &Token) -> VisitResult;
     fn visit_method(&mut self, obj: &Node, params: &NodeList, operator: &Token) -> VisitResult;
     fn visit_const(&mut self, tok: &Constant) -> VisitResult;
-//    fn visit_boolean(&mut self, tok: &Token) -> VisitResult;
-//    fn visit_integer(&mut self, tok: &Token) -> VisitResult;
-//    fn visit_float(&mut self, integer: &Token, decimal: &Token) -> VisitResult;
-//    fn visit_none(&mut self, tok: &Token) -> VisitResult;
     fn visit_identifier(&mut self, tok: &Token) -> VisitResult;
     fn visit_if(&mut self, condition: &Node, body: &NodeList, branches: &NodeList, is_else_if: &bool) -> VisitResult;
     fn visit_else(&mut self, body: &NodeList) -> VisitResult {
@@ -76,4 +71,7 @@ pub trait Visitor {
     }
     fn visit_for(&mut self, key: &Token, value: &Token, iter: &Node, body: &NodeList, for_else: &Node) -> VisitResult;
     fn visit_print(&mut self, body: &Node, escape: &bool) -> VisitResult;
+    fn visit_array(&mut self, items: &NodeList) -> VisitResult;
+    fn visit_map(&mut self, entries: &NodeList) -> VisitResult;
+    fn visit_map_entry(&mut self, key: &Node, value: &Node) -> VisitResult;
 }
