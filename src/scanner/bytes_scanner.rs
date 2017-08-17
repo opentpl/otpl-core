@@ -7,7 +7,7 @@ use {Error, Result};
 use std::str::from_utf8_unchecked;
 
 /// 符号表
-static SYMBOLS: [u8; 17] = [
+static SYMBOLS: [u8; 20] = [
     '+' as u8,
     '-' as u8,
     '*' as u8,
@@ -15,6 +15,7 @@ static SYMBOLS: [u8; 17] = [
     '%' as u8,
     '.' as u8,
     '=' as u8,
+    ':' as u8,
     '>' as u8,
     '<' as u8,
     '!' as u8,
@@ -25,6 +26,8 @@ static SYMBOLS: [u8; 17] = [
     '[' as u8,
     ']' as u8,
     ',' as u8,
+    '{' as u8,
+    '}' as u8,
 ];
 
 fn err(dev_prefix: &str, msg: String, offs: usize) -> Error {
@@ -185,6 +188,7 @@ impl<'a> BytesScanner<'a> {
 
     /// 消费掉连续的空白字符串
     fn consume_whitespace(&mut self) {
+        println!("consume_whitespace");
         while !self.is_eof() {
             if is_whitespace(self.ch) {
                 self.forward();
@@ -202,21 +206,41 @@ impl<'a> BytesScanner<'a> {
 
     /// 查找边界符
     fn find_delimiter(&mut self, kind: TokenKind) -> Option<Token> {
-        if (kind == TokenKind::LDelimiter && self.ch != self.stmt_start[0])
-            || (kind == TokenKind::RDelimiter && self.ch != self.stmt_end[0]) {
-            return None;
-        }
+        //        if (kind == TokenKind::LDelimiter && self.ch != self.stmt_start[0])
+        //            || (kind == TokenKind::RDelimiter && self.ch != self.stmt_end[0]) {
+        //            return None;
+        //        }
         //内部方法，不做过多的判断
-
+        println!("find_delimiter");
         let pos = self.offset;
-        for i in 0..self.stmt_start.len() {
-            if (kind == TokenKind::LDelimiter && self.ch != self.stmt_start[i])
-                || (kind == TokenKind::RDelimiter && self.ch != self.stmt_end[i]) {
-                self.back_pos_diff(pos);
-                return None;
+        if kind == TokenKind::LDelimiter && self.ch == self.stmt_start[0] {
+            for i in 0..self.stmt_start.len() {
+                if self.ch != self.stmt_start[i] {
+                    self.back_pos_diff(pos);
+                    return None;
+                }
+                self.forward();
             }
+        } else if kind == TokenKind::RDelimiter && self.ch == self.stmt_end[0] {
+            // 以贪婪模式匹配结束
+
+            for i in 0..self.stmt_end.len() {
+                if self.offset + i >= self.source.len() || self.source[self.offset + i] != self.stmt_end[i] {
+                    self.back_pos_diff(pos);
+                    return None;
+                }
+            }
+            let pos2 = self.offset;
             self.forward();
-        }
+            for i in 0..self.stmt_end.len() {
+                if self.offset + i >= self.source.len() || self.source[self.offset + i] != self.stmt_end[i] {
+                    self.seek((self.stmt_end.len() - 1) as isize);
+                    return Some(self.new_token(kind, pos - 1, self.offset));
+                }
+            }
+            self.back_pos_diff(pos);
+            return None;
+        } else { return None; }
         return Some(self.new_token(kind, pos, self.offset));
     }
 
@@ -238,8 +262,9 @@ impl<'a> BytesScanner<'a> {
         return false;
     }
 
-    /// 提取字符串，未找到返回 None
+    /// 查找字符串，未找到返回 None
     fn find_str(&mut self, end: u8) -> Range {
+        println!("find_str");
         let pos = self.offset;
         while self.forward() {
             let c = self.ch;
@@ -257,29 +282,65 @@ impl<'a> BytesScanner<'a> {
         return Range(0, 0);
     }
 
-    /// 提取到指定字符串
-    fn find_to_tok(&mut self, end: Vec<u8>) -> Range {
-        let pos = self.offset;
-        while self.forward() {
-            let ch = self.ch;
-            // 吃掉字符串
-            if ch == ascii::QUO {
-                self.find_str(ch);
-            } else if ch == end[0] {
-                let mut found = true;
-                for i in 0..end.len() {
-                    if self.offset + i >= self.source.len() || self.source[self.offset + i] != end[i] {
-                        found = false;
+    /// 查找到指定字符串
+    fn find(&mut self, ends: Vec<u8>) -> Range {
+        println!("find");
+        let match_more = true;
+        let skip_str = true;
+        let start = self.offset;
+        self.back();
+        if match_more {
+            let mut found = false;
+            'outer: while self.forward() {
+                let ch = self.ch;
+                if skip_str && (ch == ascii::QUO || ch == ascii::APO) {
+                    let Range(_,e)=self.find_str(ch);
+                    if e==0{
+                       break;
+                    }
+                }
+                let ch = self.ch;
+                if ch == ends[0] {
+                    for i in 0..ends.len() {
+                        if self.offset + i >= self.source.len() || self.source[self.offset + i] != ends[i] {
+                            if found {
+                                break 'outer;
+                            }
+                            continue 'outer;
+                        }
+                    }
+                    found = true;
+                } else if found {
+                    break;
+                }
+            }
+            if found {
+                self.seek((ends.len() - 1) as isize);
+                return Range(start, self.offset - ends.len());
+            }
+        } else {
+            'outer: while self.forward() {
+                let ch = self.ch;
+                if skip_str && (ch == ascii::QUO || ch == ascii::APO) {
+                    let Range(_,e)=self.find_str(ch);
+                    if e==0{
                         break;
                     }
                 }
-                if found {
-                    let offs = self.offset;
-                    self.seek(end.len() as isize);
-                    return Range(pos, offs);
+                let ch = self.ch;
+                if ch == ends[0] {
+                    for i in 0..ends.len() {
+                        if self.offset + i >= self.source.len() || self.source[self.offset + i] != ends[i] {
+                            continue 'outer;
+                        }
+                    }
+                    let end = self.offset;
+                    self.seek(ends.len() as isize);
+                    return Range(start, end);
                 }
             }
         }
+        self.back_pos_diff(start);
         return Range(0, 0);
     }
 
@@ -293,7 +354,7 @@ impl<'a> BytesScanner<'a> {
             ascii::QUO | ascii::APO => {
                 let Range(start, end) = self.find_str(ch);
                 if end > 0 {
-                    return Ok(self.new_token(TokenKind::String, start, end))
+                    return Ok(self.new_token(TokenKind::String, start, end));
                 }
                 return Err(err("scan_stmt", format!("expected string , but not found end character {}", ch as char), start));
             }
@@ -322,10 +383,10 @@ impl<'a> BytesScanner<'a> {
                 self.forward();
                 return Ok(self.new_token(TokenKind::Symbol, self.offset - 2, self.offset));
             }
-            //扫描单符合 + - * / % = : ,  . | ( ) [ ] < > ! # &
+            //扫描单符合 + - * / % = : ,  . | ( ) [ ] < > ! # & ? { }
             ascii::PLS | ascii::SUB | ascii::MUL | ascii::SLA | ascii::REM | ascii::EQS | ascii::COLON
             | ascii::COMMA | ascii::DOT | ascii::VER | ascii::LPA | ascii::RPA | ascii::LSQ | ascii::RSQ
-            | ascii::LSS | ascii::GTR | ascii::NOT | ascii::SHS| ascii::AMP => {
+            | ascii::LSS | ascii::GTR | ascii::NOT | ascii::SHS | ascii::AMP | ascii::QUM | ascii::LBK | ascii::RBK => {
                 self.forward();
                 return Ok(self.new_token(TokenKind::Symbol, self.offset - 1, self.offset));
             }
@@ -345,7 +406,9 @@ impl<'a> BytesScanner<'a> {
                 while self.forward() {
                     let ch = self.ch;
                     if self.find_sp() {
-                        return Ok(self.new_token(TokenKind::Identifier, pos, self.offset));
+                        let ret = Ok(self.new_token(TokenKind::Identifier, pos, self.offset));
+                        //self.back();
+                        return ret;
                     } else if is_digit(ch) || is_lower_letter(ch) || is_upper_letter(ch) || ch == ascii::UND { continue; }
                     return Err(err("scan_stmt", format!("unexpected  character {:?}", ch as char), pos));
                 }
@@ -503,6 +566,7 @@ impl<'a> BytesScanner<'a> {
 
         // 匹配dom属性
         while self.ch != ascii::EOF {
+            println!("scan_dom while");
             self.consume_whitespace();
             //            println!("bbbbbbbbbbbbbbb{:?}", self.ch as char);
             // 匹配dom标签结束 /> or >
@@ -521,8 +585,8 @@ impl<'a> BytesScanner<'a> {
             }
 
             let Range(attr_start, attr_end) = self.find_dom_name(true, true);
-            if attr_start == 0 {
-                return Err(err("scan_dom", format!("-unexpected character {:?}.", self.ch as char), offs));
+            if attr_end == 0 {
+                return Err(err("scan_dom", format!("unexpected character {:?}.", self.ch as char), offs));
             }
             //            println!("0=>>>>>>>>>> {} = {}", self.source[attr_start] as char, unsafe { from_utf8_unchecked(&self.source[attr_start..attr_end]) });
             self.offer_token(TokenKind::DomAttrStart, attr_start, attr_end);
@@ -547,33 +611,20 @@ impl<'a> BytesScanner<'a> {
             if let Some(_) = self.find_delimiter(TokenKind::LDelimiter) {
                 // 扩展语法只能是字符串形式
                 if self.source[attr_start] == ascii::ATS {
-                    return Err(err("scan_dom", format!("/expected character {}, found {}.", ascii::QUO as char, ch as char), pos));
+                    //期待一个字符串，找到一个代码块
+                    return Err(err("scan_dom", format!("expected character {}, found {}.", ascii::QUO as char, ch as char), pos));
                 }
-                let Range(start, end) = self.find_to_tok(vec!['}' as u8, '}' as u8]);
-                if end == 0 {
+                let mut end_s = vec![];
+                for c in self.stmt_end {
+                    end_s.push(*c);
+                }
+                let Range(attr_val_s, attr_val_e) = self.find(end_s);
+                if attr_val_e == 0 {
                     return Err(err("scan_dom", format!("语法错误, 代码块未结束, near character {},", ch as char), pos));
                 }
-                self.offer_token(TokenKind::DomAttrValue, start - 2, end + 2);
-                /*
-                //let s = unsafe { from_utf8_unchecked(&self.source[start - 2..end + 2]) };
-                //println!("1=>>>>>>>>>> {}  {}, {:?}", start, end, s);
-                let start = start - 2;
-                let mut inner = BytesScanner::new(&self.source[start..end + 2], "inner".as_ref());
-                let origin = start;
-                loop {
-                    match inner.scan_next() {
-                        Ok(mut tok) => {
-                            // 映射 pos
-                            tok.1 += origin;
-                            tok.2 += origin;
-                            self.tok_buf.offer(tok);
-                        }
-                        Err(Error::None) | Err(Error::EOF) => { break; }
-                        Err(err) => { return Err(err); }
-                    }
-                }
-                //                println!("zzzzzzzzzzzzzzzzz{:?}", self.ch as char);
-                */
+                let s = unsafe { from_utf8_unchecked(&self.source[pos..attr_val_e + self.stmt_end.len()]) };
+                println!("1=>>>>>>>>>> {:?}", s);
+                self.offer_token(TokenKind::DomAttrValue, pos, attr_val_e + self.stmt_end.len());
                 let pos = self.offset;
                 self.offer_token(TokenKind::DomAttrEnd, pos - 1, pos);
             } else {
@@ -585,34 +636,6 @@ impl<'a> BytesScanner<'a> {
                 if end == 0 {
                     return Err(err("scan_dom", format!("语法错误, 字符串未结束, near character {},", ch as char), pos));
                 }
-                /*
-                // 处理扩展语法
-                if self.source[attr_start] == ascii::ATS {
-                    let mut s = String::from("{{");
-                    s += unsafe { from_utf8_unchecked(&self.source[attr_start + 1..attr_end]) };
-                    s += " ";
-                    let origin = s.len() + start - 2;
-                    s += unsafe { from_utf8_unchecked(&self.source[start..end]) };
-                    s += "}}";
-                    println!("2=>>>>>>>>>> {}  {}, {:?}", start, end, s);
-                    let mut inner = BytesScanner::new(s.as_bytes(), "inner-ext".as_ref());
-                    loop {
-                        match inner.scan_next() {
-                            Ok(mut tok) => {
-                                println!("3=>>>>>>>>>> {:?}", tok);
-                                // 映射 pos
-//                                tok.1 += origin;
-//                                tok.2 += origin;
-                                self.tok_buf.offer(tok);
-                            }
-                            Err(Error::None) | Err(Error::EOF) => { break; }
-                            Err(err) => { return Err(err); }
-                        }
-                    }
-                    //self.tok_buf.offer(Token(TokenKind::DomAttrEnd, self.offset - 1, self.offset));
-                } else {
-                    self.tok_buf.offer(Token(TokenKind::Data, start, end));
-                }*/
                 self.offer_token(TokenKind::DomAttrValue, start, end);
 
                 //解析属性值
@@ -624,24 +647,6 @@ impl<'a> BytesScanner<'a> {
                 //                    }
                 self.offer_token(TokenKind::DomAttrEnd, end, end + 1);
             }
-
-
-            // 匹配dom标签结束 /> or >
-            //            let offs = self.offset;
-            //            if self.ch == ascii::SLA && self.match_forward(ascii::GTR) {
-            //                self.seek(2);
-            //                self.tok_buf.offer(Token(TokenKind::DomTagEnd, offs, self.offset));
-            //                return Ok(true);
-            //            } else if self.ch == ascii::GTR {
-            //                self.forward();
-            //                self.tok_buf.offer(Token(TokenKind::DomTagEnd, offs, self.offset));
-            //                return Ok(true);
-            //            } else if !is_whitespace(self.ch) {
-            //                return Err(self.err(format!("unexpected character {}.", self.ch as char), offs));
-            //            }
-
-            //继续下轮
-            //self.forward();
         }
 
         return Ok(false);
@@ -649,6 +654,7 @@ impl<'a> BytesScanner<'a> {
 
     /// 扫描下一个
     fn scan_next(&mut self) -> Result<Token> {
+        println!("scan_next");
         if !self.tok_buf.is_empty() {
             return Ok(self.tok_buf.pop().unwrap());
         }
@@ -660,6 +666,7 @@ impl<'a> BytesScanner<'a> {
         if self.in_stmt {
             if let Some(tok) = self.find_delimiter(TokenKind::RDelimiter) {
                 self.in_stmt = false;
+                //println!("EOFbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
                 return Ok(tok);
             }
             return self.scan_stmt();
@@ -668,17 +675,10 @@ impl<'a> BytesScanner<'a> {
             if let Some(tok) = self.scan_literal() {
                 return Ok(tok);
             }
-            self.consume_whitespace();
             if self.scan_comment() {
                 return self.scan_next(); // 忽略注释后，重新扫描并返回
             }
             self.in_stmt = true;
-            // TODO: 不转义输出表达式？
-            //            if self.current() == ascii::NOT
-            //                && self.can_forward()
-            //                && is_whitespace(self.src[self.offset + 1]) {
-            //                // TODO: 多行注释
-            //            }
             return Ok(tok);
         }
 
@@ -692,7 +692,7 @@ impl<'a> BytesScanner<'a> {
                         return self.scan_next();
                     }
                 }
-                Err(ex) => { return Err(ex) }
+                Err(ex) => { return Err(ex); }
             }
 
             self.back_pos_diff(pos);
@@ -701,6 +701,7 @@ impl<'a> BytesScanner<'a> {
 
 
         while self.can_forward() {
+            println!("scan_next can_forward");
             if self.is_parse_xhtml && ascii::LSS == self.ch {
                 //为扫描下个dom标签预留符号
                 break;

@@ -73,5 +73,5 @@ pub trait Visitor {
     fn visit_print(&mut self, body: &Node, escape: &bool) -> VisitResult;
     fn visit_array(&mut self, items: &NodeList) -> VisitResult;
     fn visit_map(&mut self, entries: &NodeList) -> VisitResult;
-    fn visit_map_entry(&mut self, key: &Node, value: &Node) -> VisitResult;
+    fn visit_map_entry(&mut self, key: &Token, value: &Node) -> VisitResult;
 }

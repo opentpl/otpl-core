@@ -44,7 +44,7 @@ pub enum Node {
     Const(Constant),
     /// 表示一个数组。
     Array(NodeList),
-    MapEntry(Box<Node>, Box<Node>),
+    MapEntry(Token, Box<Node>),
     Map(NodeList),
 }
 

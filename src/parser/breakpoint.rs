@@ -21,6 +21,7 @@ impl BreakPoint {
 
     pub fn build(breaks: Vec<BreakPoint>) -> Box<(FnMut(&mut Parser) -> NoneResult)> {
         return Box::new(move |parser: &mut Parser| -> NoneResult {
+            println!("BreakPoint ");
             let mut found;
             let mut buf: Vec<Token> = vec![];
             for point in &breaks {

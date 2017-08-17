@@ -27,7 +27,7 @@ fn compile(source: &[u8]) {
 
 
 #[test]
-//#[ignore]
+#[ignore]
 fn test_pure_dom() {
     let buf = "<div class=\"wrap\">
     <h1>This is a pure dom page</h1>
@@ -41,7 +41,7 @@ fn test_pure_dom() {
 }
 
 #[test]
-//#[ignore]
+#[ignore]
 fn test_extend_if() {
     let buf = "<div @if=\"i==0\">if</div>
 <div @elif=\"i==1\">else if</div>
@@ -55,7 +55,7 @@ fn test_extend_if() {
 }
 
 #[test]
-//#[ignore]
+#[ignore]
 fn test_extend_for() {
     let buf = "<div @for=\"i : arr\">{{i}}asd</div>";
     compile(buf.as_ref());
@@ -64,6 +64,13 @@ fn test_extend_for() {
 #[test]
 //#[ignore]
 fn test_binds() {
-    let buf = "<div class={{['button']}}>{{i}}asd</div>";
+    let buf = "<i class={{'el-icon-' + props.icon}} />";
+    compile(buf.as_ref());
+}
+
+#[test]
+#[ignore]
+fn test_binds_map() {
+    let buf = "<div class={{{x:1,y:{z:1}}}}/>";
     compile(buf.as_ref());
 }

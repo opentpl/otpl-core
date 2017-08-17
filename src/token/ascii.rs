@@ -12,7 +12,7 @@ pub const SP: u8 = 32;
 /// 感叹号 !
 pub const NOT: u8 = 33;
 /// 双引号 "
-pub const QUO: u8 = 34;
+pub const QUO: u8 = '"' as u8;
 /// 井号 #
 pub const SHS: u8 = 35;
 /// 美元符 $
@@ -22,7 +22,7 @@ pub const REM: u8 = 37;
 /// 与 &
 pub const AMP: u8 = 38;
 /// 单引号 '
-pub const APO: u8 = 39;
+pub const APO: u8 = '\'' as u8;
 /// 小括号 (
 pub const LPA: u8 = 40;
 /// 小括号 )
@@ -61,8 +61,12 @@ pub const BKS: u8 = 92;
 pub const RSQ: u8 = 93;
 /// 下划线 _
 pub const UND: u8 = 95;
+/// 左大括号 {
+pub const LBK: u8 = '{' as u8;
 /// 竖线 |
-pub const VER: u8 = 124;
+pub const VER: u8 = '|' as u8;
+/// 右大括号 }
+pub const RBK: u8 = '}' as u8;
 //Quotation mark 34
 //Apostrophe 39
 
